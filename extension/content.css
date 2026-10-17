@@ -3,4 +3,6 @@
 :root[data-xmf-status] [data-testid="swipe-to-dismiss"],
 [data-xmf-covered] { visibility: hidden !important; }
 [data-xmf-covered] { isolation: isolate; }
+/* X can reuse a fixed-width image wrapper from the wider post in the viewer sidebar. */
+a[href*="/status/"] > :has([data-xmf-covered]) { max-width: 100%; }
 xmf-slot { visibility: visible !important; position: absolute !important; inset: 0 !important; z-index: 3 !important; display: block !important; min-height: 80px; }

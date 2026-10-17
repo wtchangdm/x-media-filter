@@ -236,7 +236,7 @@
     const host = document.createElement("xmf-slot");
     const shadow = host.attachShadow({mode: "open"});
     const style = document.createElement("style");
-    style.textContent = ':host{display:block;width:100%;height:100%;color-scheme:light dark}button{box-sizing:border-box;width:100%;height:100%;min-height:80px;border:1px solid #607580;border-radius:12px;background:#15202b;color:#f5f7f8;font:600 14px/1.5 system-ui;padding:16px;cursor:pointer}button:hover{background:#223746}button:focus-visible{outline:3px solid #60e0a7;outline-offset:-5px}iframe{width:100%;height:100%;border:0;border-radius:12px;display:block}';
+    style.textContent = ':host{display:block;width:100%;height:100%;color-scheme:light dark}button{box-sizing:border-box;width:100%;height:100%;min-height:80px;border:0;border-radius:12px;background:#15202b;color:#f5f7f8;font:600 14px/1.5 system-ui;padding:16px;cursor:pointer}button:hover{background:#223746}button:focus-visible{outline:3px solid #60e0a7;outline-offset:-5px}iframe{width:100%;height:100%;border:0;border-radius:12px;display:block}';
     const button = document.createElement("button");
     button.type = "button";
     const item = {...desc, id: crypto.randomUUID(), identity: desc.base + "|" + desc.occurrence, element, host, shadow, style, button, frame: null, pending: false};

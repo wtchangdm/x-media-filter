@@ -39,13 +39,15 @@ node tests/virtualization.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-virtualizatio
 node tests/surfaces.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-surfaces.json
 node tests/scope.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-scope-cold.json cold
 node tests/scope.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-scope-normal.json normal
+node tests/layout.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-layout-cold.json cold
+node tests/layout.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-layout-normal.json normal
 ```
 
 These are available harnesses, not a requirement to run every one for every change. Select affected acceptance cases from [specs.md §8](../specs.md#8-implementation-gates-and-acceptance-tests). Public regression routes and discovery provenance are in [§6](../specs.md#6-discovery-evidence). Measured results and gaps are in [validation evidence](validation.md).
 
 `load.mjs` uses development-only `Extensions.loadUnpacked`. If Chrome denies it, use the manual installation/reload procedure instead; do not change security controls. If a different project path changes the unpacked extension ID, set `XMF_EXTENSION_ID` to the ID returned by `load.mjs` before running `browser.mjs`.
 
-`browser.mjs` temporarily changes popup settings, creates test/helper tabs and adds removable duplicate-attachment DOM fixtures. It restores settings and closes its helper tabs afterward. It stops only **this extension's** worker to test recovery, not X's or another extension's worker. `scope.mjs` checks native avatar zoom, non-post selector fixtures, a post image viewer and post-to-profile SPA navigation; it temporarily enables all filters and restores preferences. `virtualization.mjs` and `surfaces.mjs` require all three filters ON, not fresh-install defaults. Restore user settings and close only tabs created for the test.
+`browser.mjs` temporarily changes popup settings, creates test/helper tabs and adds removable duplicate-attachment DOM fixtures. It restores settings and closes its helper tabs afterward. It stops only **this extension's** worker to test recovery, not X's or another extension's worker. `scope.mjs` checks native avatar zoom, non-post selector fixtures, a post image viewer and post-to-profile SPA navigation; it temporarily enables all filters and restores preferences. `virtualization.mjs` and `surfaces.mjs` require all three filters ON, not fresh-install defaults. `layout.mjs` checks the supplied viewer sidebar after direct hard refresh (`ignoreCache`), native post-to-viewer SPA navigation and another hard refresh. It checks bounded, borderless placeholders, selected-image loading and duplicate isolation; it restores temporary all-ON settings and removes its duplicate fixture. Restore user settings and close only tabs created for the test.
 
 ### Safety and evidence
 

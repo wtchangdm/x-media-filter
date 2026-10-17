@@ -1,0 +1,120 @@
+{
+  "version": "0.1.0",
+  "route": "https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1",
+  "mode": "cold",
+  "settings": {
+    "a": true,
+    "c": true,
+    "b": true
+  },
+  "results": [
+    {
+      "name": "direct viewer hard refresh",
+      "passed": true,
+      "border": "0px",
+      "button": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "link": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "loaded": 0,
+      "media": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "nativeHidden": true,
+      "slot": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "visible": true
+    },
+    {
+      "name": "post-to-viewer SPA",
+      "passed": true,
+      "border": "0px",
+      "button": {
+        "height": 372.8385620117187,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "link": {
+        "height": 372.8385620117187,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "loaded": 0,
+      "media": {
+        "height": 372.8385620117187,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "nativeHidden": true,
+      "slot": {
+        "height": 372.8385620117187,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "visible": true
+    },
+    {
+      "name": "hard refresh after SPA",
+      "passed": true,
+      "border": "0px",
+      "button": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "link": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "loaded": 0,
+      "media": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "nativeHidden": true,
+      "slot": {
+        "height": 510.0000305175781,
+        "left": 1137.326416015625,
+        "right": 1405.66845703125,
+        "width": 268.342041015625
+      },
+      "visible": true
+    },
+    {
+      "name": "sidebar selection and duplicate isolation",
+      "passed": true,
+      "pageBlocked": 63,
+      "authorizedResponses": 1,
+      "statuses": [
+        200
+      ]
+    }
+  ],
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 0,
+  "passed": true
+}

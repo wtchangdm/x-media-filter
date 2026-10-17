@@ -96,7 +96,7 @@ Each blocked attachment has its own local placeholder:
 
 - Suggested text: **“Image blocked — click to load”** / **“Video blocked — click to load.”**
 - Use locally generated markup/CSS/icons; no remote thumbnails, blurred previews, dimension probes, or media prefetches.
-- Preserve a reasonable layout using dimensions already present in DOM/API metadata. Keep a placeholder per attachment in multi-image or mixed-media posts. Activating any still-image placeholder loads the remaining still images in its attachment-post/occurrence group, not videos or another attachment group.
+- Preserve a reasonable layout using dimensions already present in DOM/API metadata. Constrain post-media wrappers to their available link width, including the image viewer's narrow sidebar after a hard refresh. Placeholders have no decorative border; retain visible keyboard focus. Keep a placeholder per attachment in multi-image or mixed-media posts. Activating any still-image placeholder loads the remaining still images in its attachment-post/occurrence group, not videos or another attachment group.
 - Keep each image's loading/error state and validated loader ticket separate. Loading and retries must not expand authorization beyond the intended still-image group or selected video.
 - Clicking or keyboard-activating the placeholder must not also open the tweet/quote/gallery or trigger unrelated X actions. Other post interactions must continue to work.
 - The loaded image remains viewable and the loaded video playable. If opening a viewer is supported, selection does not authorize adjacent items outside the explicitly authorized still-image group.
