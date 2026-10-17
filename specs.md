@@ -90,7 +90,7 @@ The fresh-install defaults are **A OFF, C OFF, B ON**. “Load normally” means
 
 ## 4. UI behavior
 
-The popup contains the three exactly labeled switches in A, C, B order and a brief explanation, uses a dark-only theme, and has no footer. No separate image/video switches are needed. Use accessible checkbox/switch semantics, keyboard operation, visible focus, and readable ON/OFF state without relying only on color. Show persistence errors instead of pretending a change succeeded.
+The popup contains the three exactly labeled switches in A, C, B order and a brief explanation, uses a dark-only theme, and has no footer. No separate image/video switches are needed. Use accessible checkbox/switch semantics, keyboard operation, visible focus, and distinguish ON/OFF by thumb position as well as color, without separate ON/OFF text beside each switch. Show persistence errors instead of pretending a change succeeded.
 
 Each blocked attachment has its own local placeholder:
 

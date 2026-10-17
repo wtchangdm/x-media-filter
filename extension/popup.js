@@ -5,7 +5,6 @@ let current = {a: true, c: true, b: true};
 function render() {
   for (const input of inputs) {
     input.checked = current[input.id];
-    document.getElementById(input.id + "-state").textContent = input.checked ? "ON" : "OFF";
   }
 }
 function failure(message) { error.textContent = message; error.hidden = false; }
