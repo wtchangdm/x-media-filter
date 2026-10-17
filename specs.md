@@ -15,7 +15,7 @@ Build a Chrome extension for **all X post surfaces**, not just individual status
 
 | Requirement | Agreed behavior |
 | --- | --- |
-| Tagline | **Browsing X without washing your eyes after reading unpleasant stuff in the comments**. Use the exact text in README and the store/manifest short description. It is branding, not a claim of automatic unpleasant-content classification. |
+| Tagline | **Browse X without needing to bleach your eyes.**. Use the exact text in README and the store/manifest short description. It is branding, not a claim of automatic unpleasant-content classification. |
 | Media | Images and videos; UI wording can use “media.” |
 | Control A (`a`) | **Filter media on post**: the focused post, independent feed items, and posts on non-status surfaces. Default OFF. |
 | Control C (`c`) | **Filter media on author replies**: conversation replies and ancestors by the focused post's author. Default OFF. |

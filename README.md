@@ -1,6 +1,6 @@
 # X Media Filter
 
-> Browsing X without washing your eyes after reading unpleasant stuff in the comments
+> Browse X without needing to bleach your eyes.
 
 Choose which post images and videos download on x.com. Filtered attachments show click-to-load placeholders, so you can keep reading and load media when you want it.
 

@@ -139,6 +139,18 @@ The 82 offline protocol/policy tests and historical network evidence remain dist
 4. Obtain explicit **Submit for Review** authorization. Use deferred publishing rather than automatic publication.
 5. Obtain explicit publication authorization after approval. A store-assigned extension ID differs from the unpacked ID; runtime code uses `chrome.runtime.id/getURL`, not the development ID. Preferences do not automatically migrate between the two installations.
 
+## Automation prerequisites
+
+Packaging can be automated immediately with `python3 scripts/package.py`; no public store release or GitHub Release is required. No CI workflow or credentials have been configured yet.
+
+For Chrome Web Store automation, the recommended first step is **Add new item → upload the ZIP**, then keep it as a draft. This provides the extension/item ID; obtain the publisher ID from **Publisher → Settings**. The current v2 upload endpoint updates an existing item, so these IDs are needed for automated uploads/status checks. Store Listing and Privacy fields must be completed in the dashboard before publishing a new item.
+
+Creating the draft is not public publication. Build/upload automation can be prepared before going live. API authentication requires the owner's Google Cloud/API setup (OAuth or an authorized service account); do not put tokens or secrets in the repository/chat. Publication remains a separately authorized operation; API `publish` can submit for review and supports staged publishing.
+
+The official API guide also states that after changing visibility in the dashboard, API publication is unavailable until the item has been manually published with that visibility at least once. Choose Public/Unlisted before the first manual release; do not assume that automating package uploads also completes this visibility prerequisite. First-release setup/manual publication is the recommended path, then automate subsequent updates with increasing manifest versions.
+
+Sources: [API setup and visibility restrictions](https://developer.chrome.com/docs/webstore/using-api), [first-item dashboard upload](https://developer.chrome.com/docs/webstore/publish), [v2 upload](https://developer.chrome.com/docs/webstore/api/reference/rest/v2/media/upload), [v2 publish/staging](https://developer.chrome.com/docs/webstore/api/reference/rest/v2/publishers.items/publish).
+
 ## Remaining publisher actions — short checklist
 
 1. Confirm registration/payment, 2-Step Verification, public publisher name and Trader declaration in the [dashboard](https://chrome.google.com/webstore/devconsole/). Email verification is reported done; no credentials or identity documents belong in GitHub/chat.

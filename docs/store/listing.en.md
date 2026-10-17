@@ -8,13 +8,13 @@ X Media Filter
 
 ## Short description
 
-Browsing X without washing your eyes after reading unpleasant stuff in the comments
+Browse X without needing to bleach your eyes.
 
-This is the user-selected tagline and manifest description (83 characters). Keep the manifest as the source of truth; the store limit is 132 characters.
+This is the user-selected tagline and manifest description (45 characters). Keep the manifest as the source of truth; the store limit is 132 characters.
 
 ## Detailed description — paste the text below
 
-Browsing X without washing your eyes after reading unpleasant stuff in the comments
+Browse X without needing to bleach your eyes.
 
 Choose which post images and videos load while you browse x.com. Free to use.
 

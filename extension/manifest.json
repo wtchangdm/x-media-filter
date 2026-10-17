@@ -3,7 +3,7 @@
   "name": "X Media Filter",
   "version": "0.1.0",
   "minimum_chrome_version": "128",
-  "description": "Browsing X without washing your eyes after reading unpleasant stuff in the comments",
+  "description": "Browse X without needing to bleach your eyes.",
   "icons": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"},
   "permissions": ["storage", "declarativeNetRequest"],
   "host_permissions": ["https://x.com/*", "https://*.x.com/*", "https://pbs.twimg.com/*", "https://video.twimg.com/*"],
