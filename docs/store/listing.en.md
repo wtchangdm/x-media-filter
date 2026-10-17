@@ -8,11 +8,13 @@ X Media Filter
 
 ## Short description
 
-Filter X post media downloads with click-to-load image groups and videos.
+Browsing X without washing your eyes after reading unpleasant stuff in the comments
 
-This is the existing manifest description (73 characters). Keep the manifest as the source of truth; the store limit is 132 characters.
+This is the user-selected tagline and manifest description (83 characters). Keep the manifest as the source of truth; the store limit is 132 characters.
 
 ## Detailed description — paste the text below
+
+Browsing X without washing your eyes after reading unpleasant stuff in the comments
 
 Choose which post images and videos load while you browse x.com. Free to use.
 
@@ -53,7 +55,7 @@ Independent extension; not affiliated with or endorsed by X Corp.
 - Policy effective date: 2026-10-17.
 - Source license: MIT.
 
-Support uses documentation and the verified developer contact email shown on the store listing, not GitHub Issues. The user reports the contact email is verified; its value is deliberately not copied into this repository. Disable the store's built-in Item support visibility in Account settings if no public support hub is desired; this does not remove meaningful-support or contact obligations.
+Support uses documentation and the verified developer contact email shown on the store listing. The user reports the contact email is verified; its value is deliberately not copied into this repository. Disable the store's built-in Item support visibility in Account settings if no public support hub is desired; this does not remove meaningful-support or contact obligations.
 
 ## Image upload order
 

@@ -9,7 +9,7 @@
 - **Repository:** [wtchangdm/x-media-filter](https://github.com/wtchangdm/x-media-filter), public, default branch `main`.
 - **License:** [MIT](../../LICENSE), copyright 2026 wtchangdm. The release ZIP also includes this notice.
 - **Policy:** https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md
-- **Support:** https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md — documentation plus the store's verified developer contact email; no GitHub Issues.
+- **Support:** https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md — documentation plus the store's verified developer contact email.
 - **Publisher name/date:** `wtchangdm` (GitHub maintainer used as the initial public name), policy effective 2026-10-17. Confirm the actual store publisher name before submission. No separate policy website is required.
 - **Language:** English throughout project documentation and store materials.
 - **Artwork origin:** all supplied artwork was generated with ChatGPT, as confirmed by the user. This is recorded as the source, not treated as an unanswered provenance question.
@@ -26,7 +26,7 @@
 | Permission/data disclosures and full policy checklist | [privacy-practices.md](privacy-practices.md) |
 | GitHub-readable privacy policy | [PRIVACY.md](../../PRIVACY.md) |
 | Reviewer test instructions | [reviewer-notes.en.md](reviewer-notes.en.md) |
-| User support and troubleshooting | [SUPPORT.md](../../SUPPORT.md), with no public issue tracker |
+| User support and troubleshooting | [SUPPORT.md](../../SUPPORT.md) |
 | Required images | [440×280 small promo](../../assets/store/exports/small-promo-440x280.png), [1280×800 actual UI screenshot](../../assets/store/exports/screenshot-settings-1280x800.png), [128×128 icon](../../extension/icons/icon-128.png) |
 | Optional marquee | [1400×560 supplied wide illustration](../../assets/store/exports/marquee-media-filter-1400x560.png) |
 
@@ -74,9 +74,9 @@ Official instructions: [register](https://developer.chrome.com/docs/webstore/reg
 
 ## Support contact
 
-Use [SUPPORT.md](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) as the store's Support URL. It provides installation, troubleshooting and limitations. For direct support or privacy requests, it directs users to the verified developer contact email displayed on the store listing once available; no personal address is copied into this repo. The user reports that email is verified. GitHub Issues are disabled, and there were no existing issues before the change.
+Use [SUPPORT.md](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) as the store's Support URL. It provides installation, troubleshooting and limitations. For direct support or privacy requests, it directs users to the verified developer contact email displayed on the store listing once available; no personal address is copied into this repo. The user reports that email is verified.
 
-For the store's built-in public support hub, go to dashboard **Account → Item support → Visibility** and turn it OFF if enabled. This setting has not been inspected or changed here; the publisher must do it in the dashboard. It is separate from GitHub Issues.
+For the store's built-in public support hub, go to dashboard **Account → Item support → Visibility** and turn it OFF if enabled. This setting has not been inspected or changed here; the publisher must do it in the dashboard.
 
 Disabling public queues does not waive support: official policies require meaningful customer support and accurate contact information for free extensions too. Paid products/in-app transactions have the agreement's specific three-business-day response requirement; this free product has no such fixed SLA asserted here. Support is best effort, not a promise to ignore all requests. Review the email-provider/retention wording against the real mailbox practices before certification.
 
@@ -96,7 +96,7 @@ All former policy placeholders are filled:
 
 Remaining approvals:
 
-- [ ] Confirm the final store publisher name; monitor the developer-contact mailbox rather than a public Issues queue. Review support-email recipients, retention and deletion wording against the actual mail service/practices.
+- [ ] Confirm the final store publisher name and monitor the developer-contact mailbox. Review support-email recipients, retention and deletion wording against the actual mail service/practices.
 - [ ] Approve the policy's complete data-handling disclosures, listed individually in [privacy-practices.md](privacy-practices.md).
 - [ ] Resolve whether additional in-product disclosure/affirmative consent applies to this necessary local processing. The existing popup has no separate processing notice, policy link or consent gate. This is an unresolved assessment, not a demonstrated mandatory new feature or established severe blocker.
 - [ ] Check the live dashboard's data-category definitions and certify the three limited-use statements only after they match the final product/policy/support practices.
@@ -113,7 +113,7 @@ The policy has no remaining placeholder values or unpublished-draft notice. It n
 - [ ] Decide whether to complete outstanding browser cases or release with the clearly documented limitations. See [validation evidence](../validation.md).
 - [ ] Authorize upload/submission, then separately authorize publication. Preparation alone is not permission to publish.
 
-Free pricing, all available regions, GitHub repository/policy hosting, MIT licensing and documentation/email support without GitHub Issues are **settled**, not questions to ask again. Only the store visibility needs confirmation if the user now prefers Unlisted over the previously selected Public.
+Free pricing, all available regions, GitHub repository/policy hosting, MIT licensing and documentation/email support are **settled**, not questions to ask again. Only the store visibility needs confirmation if the user now prefers Unlisted over the previously selected Public.
 
 ## Store requirements already checked
 
@@ -148,7 +148,7 @@ The 82 offline protocol/policy tests and historical network evidence remain dist
 5. Resolve dashboard warnings and decide whether to address remaining browser gaps or retain the honest limitations. If X login prevents review, arrange authorized access without sharing personal session cookies/headers.
 6. Authorize **Submit for Review**, with automatic publication disabled/deferred. After approval, separately authorize publication.
 
-No runtime change or new browser validation is implied by these support-document edits. The existing ZIP remains unchanged.
+The tagline is shared by README, the listing's short description and `manifest.json`. Rebuild the ZIP after manifest-copy changes; no new browser validation is implied by editorial changes.
 
 ## Official sources
 

@@ -40,7 +40,7 @@ The GitHub-readable [PRIVACY.md](../../PRIVACY.md) has **no remaining placeholde
 | Public maintainer/publisher name | `wtchangdm` | Authenticated GitHub owner; use as the initial public name, not a verified legal identity. Confirm it matches the intended store publisher. |
 | Repository/homepage | https://github.com/wtchangdm/x-media-filter | Same-name public repository requested by the user. |
 | Privacy policy | https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md | Rendered Markdown on the default branch; no separate website required. |
-| Support | https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md | Documentation/troubleshooting, with the store's verified developer contact email for direct support/privacy requests. GitHub Issues are disabled. |
+| Support | https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md | Documentation/troubleshooting, with the store's verified developer contact email for direct support/privacy requests. |
 | Effective date | 2026-10-17 | Current policy-preparation/public-source date, not a claimed store release date. |
 | License | MIT | Explicitly requested; root LICENSE is also included in the release ZIP. |
 | Price / visibility / regions | Free / public / all available store regions | Explicit user decisions, subject to platform restrictions. |

@@ -1,6 +1,6 @@
 # X Media Filter Support
 
-This page provides installation help, troubleshooting and known limitations for X Media Filter **0.1.0**. GitHub Issues are disabled; this project does not use a public ticket queue.
+Installation help, troubleshooting and known limitations for X Media Filter **0.1.0**.
 
 ## Install and start
 
