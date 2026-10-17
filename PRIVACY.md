@@ -3,7 +3,7 @@
 - Publisher: **wtchangdm**
 - Effective date: **2026-10-17**
 - Project: [X Media Filter](https://github.com/wtchangdm/x-media-filter)
-- Support: [GitHub Issues](https://github.com/wtchangdm/x-media-filter/issues)
+- Support: [Support and troubleshooting](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md)
 - Applies to extension version **0.1.0**.
 
 ## Purpose
@@ -42,10 +42,14 @@ X Media Filter's use of information accessed through Chrome APIs adheres to the 
 
 This policy and the project's source are hosted in the public [X Media Filter repository](https://github.com/wtchangdm/x-media-filter). Visiting GitHub is separate from using the extension: the extension does not send browsing data to GitHub. GitHub processes website visits and account activity under the [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 
-The support channel is [GitHub Issues](https://github.com/wtchangdm/x-media-filter/issues). Submitting an issue makes your GitHub username, issue text and attachments public. Only submit information you choose to share. Support discussions are retained as repository records until removed; closing an issue does not delete it. The publisher can remove repository content they control, but cannot promise deletion from third-party copies, GitHub backups or GitHub's own records. GitHub's policies govern its platform retention and deletion.
+The [support page](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) provides installation help, troubleshooting and known limitations. GitHub Issues are disabled. For direct support or privacy requests, use the verified developer contact email displayed on the extension's Chrome Web Store listing when available; no personal address is duplicated in this repository.
 
-Do not include passwords, cookies, authentication headers, CDP URLs, private posts or unrelated account information in public issues. Request removal of accidentally posted personal information through the support channel or GitHub's reporting tools, without reposting that information.
+If you choose to send an email, the publisher receives your sender address, message and any attachments. This is separate from the extension, which does not automatically send diagnostics or browsing records. Support information is used to address your request, troubleshoot the extension, handle security/privacy concerns and meet applicable obligations. The publisher and the email providers involved in delivering or responding to the message process that correspondence; it is not posted to a public issue tracker. Email providers' own service/privacy policies also apply.
+
+Support correspondence is retained only as needed to address the request and meet applicable security/legal obligations, then deleted when no longer needed. Request access or deletion through the same developer contact address. This does not promise erasure of recipients' copies, provider backups or records the provider or publisher must retain under applicable requirements. No fixed provider log-retention period is invented here.
+
+Do not send passwords, cookies, authentication headers, CDP URLs, private posts or unrelated account information. Share only the minimum information needed for your request and redact personal information from screenshots.
 
 ## Changes and contact
 
-The publisher will update this policy when data practices change and provide any disclosures or consent required for those changes. For questions, use [GitHub Issues](https://github.com/wtchangdm/x-media-filter/issues).
+The publisher will update this policy when data practices change and provide any disclosures or consent required for those changes. For questions, start with the [support page](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) and its developer-contact instructions.

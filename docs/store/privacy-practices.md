@@ -40,12 +40,12 @@ The GitHub-readable [PRIVACY.md](../../PRIVACY.md) has **no remaining placeholde
 | Public maintainer/publisher name | `wtchangdm` | Authenticated GitHub owner; use as the initial public name, not a verified legal identity. Confirm it matches the intended store publisher. |
 | Repository/homepage | https://github.com/wtchangdm/x-media-filter | Same-name public repository requested by the user. |
 | Privacy policy | https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md | Rendered Markdown on the default branch; no separate website required. |
-| Support | https://github.com/wtchangdm/x-media-filter/issues | Initial support channel using the selected public repository. The maintainer should monitor it. |
+| Support | https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md | Documentation/troubleshooting, with the store's verified developer contact email for direct support/privacy requests. GitHub Issues are disabled. |
 | Effective date | 2026-10-17 | Current policy-preparation/public-source date, not a claimed store release date. |
 | License | MIT | Explicitly requested; root LICENSE is also included in the release ZIP. |
 | Price / visibility / regions | Free / public / all available store regions | Explicit user decisions, subject to platform restrictions. |
 
-The policy discloses GitHub hosting and public Issues records and links GitHub's own privacy statement. No provider log-retention period has been invented. Keep the public policy current and review it before store certification. The account owner's legal verification, email, Trader classification and any additional consent determination cannot be filled from a GitHub profile; see [account setup and remaining approvals](README.md#where-to-set-up-your-chrome-web-store-account).
+The policy discloses GitHub document hosting and voluntarily emailed support messages, including sender/message/attachment processing, purpose, recipients, retention and deletion requests. It does not promise that a support message is never seen by the publisher, and does not invent a provider log-retention period. The user reports the store contact email is verified; its address and mail-provider identity were not supplied or inspected, and no personal email is added to GitHub. Review the email-processing description against the actual mailbox/provider practices before store certification and add provider-specific disclosures if needed. Account legal verification, Trader classification and any additional consent determination cannot be inferred from a GitHub profile; see [account setup and remaining approvals](README.md#where-to-set-up-your-chrome-web-store-account).
 
 ## Complete disclosure checklist
 
@@ -60,7 +60,7 @@ These subjects are already addressed in the draft policy and/or listing. The pub
 - [ ] Direct HTTPS requests to the named X CDNs, which receive the media URL, IP and ordinary request information.
 - [ ] X's own traffic and Google's platform processing are separate; filtering is not anonymity or total tracking prevention.
 - [ ] Retention, revocation, uninstall behavior and the fact that downloaded bytes/browser caches cannot be undone.
-- [ ] GitHub policy hosting and public Issues support, including voluntarily submitted usernames/text/attachments and public-record retention.
+- [ ] GitHub policy/support document hosting and optional email support, including voluntarily submitted sender address/message/attachments, mail-provider processing, retention and deletion requests.
 - [ ] Limited Use statement, policy changes and a working support channel.
 - [ ] Final dashboard categories and all three data-use certifications match actual behavior.
 
@@ -85,3 +85,5 @@ Previously checked 2026-10-17. Recheck the final dashboard wording at submission
 - [Privacy policy requirements](https://developer.chrome.com/docs/webstore/program-policies/privacy)
 - [Limited Use](https://developer.chrome.com/docs/webstore/program-policies/limited-use)
 - [Disclosure requirements](https://developer.chrome.com/docs/webstore/program-policies/disclosure-requirements)
+- [Meaningful customer support requirement](https://developer.chrome.com/docs/webstore/program-policies/policies)
+- [Developer agreement, including support/contact requirements](https://developer.chrome.com/docs/webstore/program-policies/terms)

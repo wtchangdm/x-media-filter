@@ -47,11 +47,13 @@ Independent extension; not affiliated with or endorsed by X Corp.
 ## Store URLs — ready to paste
 
 - Privacy policy: https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md
-- Support: https://github.com/wtchangdm/x-media-filter/issues
+- Support: https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md
 - Homepage: https://github.com/wtchangdm/x-media-filter
 - Proposed publisher name: wtchangdm; final confirmation belongs in the developer account.
 - Policy effective date: 2026-10-17.
 - Source license: MIT.
+
+Support uses documentation and the verified developer contact email shown on the store listing, not GitHub Issues. The user reports the contact email is verified; its value is deliberately not copied into this repository. Disable the store's built-in Item support visibility in Account settings if no public support hub is desired; this does not remove meaningful-support or contact obligations.
 
 ## Image upload order
 

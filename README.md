@@ -6,9 +6,9 @@ Native Chrome Manifest V3 extension, version **0.1.0**. No npm install, build st
 
 ## Public release preparation
 
-The planned release is **free, public, and available in all regions offered by the Chrome Web Store**. Source: [wtchangdm/x-media-filter](https://github.com/wtchangdm/x-media-filter), under the [MIT License](LICENSE). [Privacy policy](https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md) and [support](https://github.com/wtchangdm/x-media-filter/issues) are hosted on GitHub. The Chrome Web Store extension has not been uploaded, submitted for review or published; public source hosting is separate.
+The planned release is **free, public, and available in all regions offered by the Chrome Web Store**. Source: [wtchangdm/x-media-filter](https://github.com/wtchangdm/x-media-filter), under the [MIT License](LICENSE). [Privacy policy](https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md) and [support](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) are hosted on GitHub. The Chrome Web Store extension has not been uploaded, submitted for review or published; public source hosting is separate.
 
-Run `python3 scripts/package.py` to create `artifacts/release/x-media-filter-0.1.0.zip`, its SHA-256 checksum and a per-file inventory. See the [release checklist](docs/store/README.md) for listing text, disclosures, reviewer instructions, images and all remaining decisions. The [privacy policy](PRIVACY.md) identifies GitHub maintainer `wtchangdm`, this repository, Issues support and its 2026-10-17 effective date. Final store certifications and account setup remain pending; see [where to register](docs/store/README.md#where-to-set-up-your-chrome-web-store-account).
+Run `python3 scripts/package.py` to create `artifacts/release/x-media-filter-0.1.0.zip`, its SHA-256 checksum and a per-file inventory. See the [release checklist](docs/store/README.md) for listing text, disclosures, reviewer instructions, images and all remaining decisions. The [privacy policy](PRIVACY.md) identifies GitHub maintainer `wtchangdm`, this repository, documentation/email-based support and its 2026-10-17 effective date. Final store certifications and account setup remain pending; see [where to register](docs/store/README.md#where-to-set-up-your-chrome-web-store-account).
 
 ## Install unpacked
 

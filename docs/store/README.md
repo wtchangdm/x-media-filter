@@ -5,11 +5,11 @@
 ## Confirmed decisions
 
 - **Price:** free. A free listing does not remove Google's separate one-time developer registration fee.
-- **Visibility and regions:** public, in all regions available in the Chrome Web Store dashboard, subject to platform restrictions.
+- **Visibility and regions:** the last explicitly selected store visibility is Public, in all available regions, subject to platform restrictions. Unlisted was discussed but has not been selected or applied; confirm the intended visibility at submission. Both use the same policies/review.
 - **Repository:** [wtchangdm/x-media-filter](https://github.com/wtchangdm/x-media-filter), public, default branch `main`.
 - **License:** [MIT](../../LICENSE), copyright 2026 wtchangdm. The release ZIP also includes this notice.
 - **Policy:** https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md
-- **Support:** https://github.com/wtchangdm/x-media-filter/issues
+- **Support:** https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md — documentation plus the store's verified developer contact email; no GitHub Issues.
 - **Publisher name/date:** `wtchangdm` (GitHub maintainer used as the initial public name), policy effective 2026-10-17. Confirm the actual store publisher name before submission. No separate policy website is required.
 - **Language:** English throughout project documentation and store materials.
 - **Artwork origin:** all supplied artwork was generated with ChatGPT, as confirmed by the user. This is recorded as the source, not treated as an unanswered provenance question.
@@ -26,6 +26,7 @@
 | Permission/data disclosures and full policy checklist | [privacy-practices.md](privacy-practices.md) |
 | GitHub-readable privacy policy | [PRIVACY.md](../../PRIVACY.md) |
 | Reviewer test instructions | [reviewer-notes.en.md](reviewer-notes.en.md) |
+| User support and troubleshooting | [SUPPORT.md](../../SUPPORT.md), with no public issue tracker |
 | Required images | [440×280 small promo](../../assets/store/exports/small-promo-440x280.png), [1280×800 actual UI screenshot](../../assets/store/exports/screenshot-settings-1280x800.png), [128×128 icon](../../extension/icons/icon-128.png) |
 | Optional marquee | [1400×560 supplied wide illustration](../../assets/store/exports/marquee-media-filter-1400x560.png) |
 
@@ -52,7 +53,7 @@ This refers to the **Chrome Web Store developer account**, not the artwork or Ch
 
 1. Which Google/developer account will own the listing, and which public developer name it will show.
 2. Whether developer registration and its one-time fee are complete.
-3. Whether the required contact email is verified.
+3. Whether the required contact email is verified — **reported complete by the user**, not independently inspected.
 4. Whether Google 2-Step Verification is enabled.
 5. Whether the publisher has declared Trader/Non-Trader status and completed any required verification.
 
@@ -69,11 +70,15 @@ Start at the official [Chrome Web Store Developer Dashboard](https://chrome.goog
 5. Declare **Trader or Non-Trader** and complete any applicable verification. This is a legal self-classification, not something inferred from GitHub or the extension being free. Supply any requested identity/contact information directly to Google.
 6. Once ready, the dashboard's **Items / Add new item** flow is where the ZIP and prepared store fields go. Do not submit for review or enable automatic publication until final approval.
 
-Official instructions: [register](https://developer.chrome.com/docs/webstore/register), [set up the account](https://developer.chrome.com/docs/webstore/set-up-account). Account status has not been inspected or changed by this work.
+Official instructions: [register](https://developer.chrome.com/docs/webstore/register), [set up the account](https://developer.chrome.com/docs/webstore/set-up-account). Account status has not been inspected or changed by this work. The user reports contact-email verification is complete; registration/payment, 2-Step Verification and Trader status have not been independently confirmed.
 
 ## Support contact
 
-Use [GitHub Issues](https://github.com/wtchangdm/x-media-filter/issues) as the initial public support channel. It avoids inventing or exposing a personal support email. The maintainer should monitor it; issues, usernames and attachments are public, as disclosed in the policy. Google's required verified developer-account email is separate and still must be configured directly in the dashboard.
+Use [SUPPORT.md](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) as the store's Support URL. It provides installation, troubleshooting and limitations. For direct support or privacy requests, it directs users to the verified developer contact email displayed on the store listing once available; no personal address is copied into this repo. The user reports that email is verified. GitHub Issues are disabled, and there were no existing issues before the change.
+
+For the store's built-in public support hub, go to dashboard **Account → Item support → Visibility** and turn it OFF if enabled. This setting has not been inspected or changed here; the publisher must do it in the dashboard. It is separate from GitHub Issues.
+
+Disabling public queues does not waive support: official policies require meaningful customer support and accurate contact information for free extensions too. Paid products/in-app transactions have the agreement's specific three-business-day response requirement; this free product has no such fixed SLA asserted here. Support is best effort, not a promise to ignore all requests. Review the email-provider/retention wording against the real mailbox practices before certification.
 
 ## All remaining items before submission
 
@@ -84,28 +89,31 @@ All former policy placeholders are filled:
 - [x] Public maintainer/publisher draft name: `wtchangdm`, from the authenticated GitHub account, not an inferred legal identity.
 - [x] Repository/homepage: https://github.com/wtchangdm/x-media-filter
 - [x] Policy URL: https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md
-- [x] Support URL: https://github.com/wtchangdm/x-media-filter/issues
+- [x] Support URL: https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md
+- [x] Contact email verification: reported complete by the user; the address is not copied into this repo.
 - [x] Policy effective date: 2026-10-17, the policy-preparation/public-source date, not a claimed store release date.
 - [x] License: MIT, as requested.
 
 Remaining approvals:
 
-- [ ] Confirm the final store publisher name and the maintainer's ability to monitor Issues; review the public-support retention wording.
+- [ ] Confirm the final store publisher name; monitor the developer-contact mailbox rather than a public Issues queue. Review support-email recipients, retention and deletion wording against the actual mail service/practices.
 - [ ] Approve the policy's complete data-handling disclosures, listed individually in [privacy-practices.md](privacy-practices.md).
 - [ ] Resolve whether additional in-product disclosure/affirmative consent applies to this necessary local processing. The existing popup has no separate processing notice, policy link or consent gate. This is an unresolved assessment, not a demonstrated mandatory new feature or established severe blocker.
 - [ ] Check the live dashboard's data-category definitions and certify the three limited-use statements only after they match the final product/policy/support practices.
-The policy has no remaining placeholder values or unpublished-draft notice. It names GitHub hosting and Issues support, links GitHub's own privacy statement, and does not invent a platform log-retention period. Filled fields do not substitute for the publisher's final review or store certifications.
+
+The policy has no remaining placeholder values or unpublished-draft notice. It names GitHub document hosting and voluntary email support, links GitHub's privacy statement, and does not invent provider log-retention periods. Filled fields do not substitute for the publisher's final review or store certifications.
 
 ### Other release prerequisites
 
-- [ ] Confirm developer-account readiness using the five points above; the account itself has not been inspected.
+- [ ] Confirm the remaining developer-account prerequisites: registration/payment, 2-Step Verification, final publisher name and Trader/Non-Trader status. Contact-email verification is already reported complete.
+- [ ] Turn off the store's built-in Item support visibility if enabled; no dashboard account settings were changed by this work.
 - [x] Public GitHub repository and MIT source license selected and authorized. Local history uses a GitHub noreply commit email; generated extension metadata, release artifacts and browser/private data are excluded from source control.
 - [ ] Review the direct image crops and final listing. ChatGPT provenance is recorded; no independent legal clearance or blanket guarantee against third-party rights is claimed. No extra artwork-source information is requested.
 - [ ] If X's login wall blocks review, arrange an authorized review-access method. Do not give reviewers personal cookies, authentication headers or CDP URLs.
 - [ ] Decide whether to complete outstanding browser cases or release with the clearly documented limitations. See [validation evidence](../validation.md).
 - [ ] Authorize upload/submission, then separately authorize publication. Preparation alone is not permission to publish.
 
-Free pricing, all available regions, the GitHub repository/policy/support URLs and MIT licensing are **settled**, not questions to ask again.
+Free pricing, all available regions, GitHub repository/policy hosting, MIT licensing and documentation/email support without GitHub Issues are **settled**, not questions to ask again. Only the store visibility needs confirmation if the user now prefers Unlisted over the previously selected Public.
 
 ## Store requirements already checked
 
@@ -127,9 +135,20 @@ The 82 offline protocol/policy tests and historical network evidence remain dist
 
 1. Complete developer-account setup and the remaining final approvals. GitHub source/policy publication is separate from Chrome Web Store publication and was authorized by the repository request.
 2. Verify the final ZIP hash, listing, images, public policy/support links and dashboard warnings.
-3. With upload authorization, create the store draft and fill Listing, Privacy, Distribution and Test instructions. Choose free/public/all available regions.
+3. In **Items → Add new item**, upload `artifacts/release/x-media-filter-0.1.0.zip` and fill Listing, Privacy, Distribution and Test instructions from the prepared docs. Use free/all available regions; confirm Public versus Unlisted before applying visibility. Both have the same review/policy requirements. Add the prepared icon/promo/screenshot, policy URL and SUPPORT.md URL; keep the built-in public support hub off if desired.
 4. Obtain explicit **Submit for Review** authorization. Use deferred publishing rather than automatic publication.
 5. Obtain explicit publication authorization after approval. A store-assigned extension ID differs from the unpacked ID; runtime code uses `chrome.runtime.id/getURL`, not the development ID. Preferences do not automatically migrate between the two installations.
+
+## Remaining publisher actions — short checklist
+
+1. Confirm registration/payment, 2-Step Verification, public publisher name and Trader declaration in the [dashboard](https://chrome.google.com/webstore/devconsole/). Email verification is reported done; no credentials or identity documents belong in GitHub/chat.
+2. Use the documentation support URL and turn off **Account → Item support → Visibility** if enabled. Keep the verified contact mailbox monitored.
+3. Confirm **Public or Unlisted**. The repository stays public either way; Unlisted store links are shareable, not access control.
+4. Upload the prepared ZIP/assets and paste the listing, policy/support URLs and reviewer instructions. Review data categories, permission explanations, no-remote-code answer and all three data-use certifications against the actual product/mailbox practices. Resolve any applicable in-product disclosure/consent requirement before submission; this remains an assessment, not a demonstrated mandatory new consent screen.
+5. Resolve dashboard warnings and decide whether to address remaining browser gaps or retain the honest limitations. If X login prevents review, arrange authorized access without sharing personal session cookies/headers.
+6. Authorize **Submit for Review**, with automatic publication disabled/deferred. After approval, separately authorize publication.
+
+No runtime change or new browser validation is implied by these support-document edits. The existing ZIP remains unchanged.
 
 ## Official sources
 
@@ -144,3 +163,7 @@ The 82 offline protocol/policy tests and historical network evidence remain dist
 - [2-Step Verification](https://developer.chrome.com/docs/webstore/program-policies/two-step-verification)
 - [Trader FAQ](https://developer.chrome.com/docs/webstore/program-policies/trader-verification-faq)
 - [Submission and deferred publishing](https://developer.chrome.com/docs/webstore/publish)
+- [Visibility options — same policy/review requirements](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution)
+- [Support hub settings](https://developer.chrome.com/docs/webstore/support-users)
+- [Meaningful customer support requirement](https://developer.chrome.com/docs/webstore/program-policies/policies)
+- [Developer agreement §3.4](https://developer.chrome.com/docs/webstore/program-policies/terms)
