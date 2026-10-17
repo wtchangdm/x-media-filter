@@ -1,0 +1,245 @@
+{
+  "version": "0.1.0",
+  "mode": "normal",
+  "results": [
+    {
+      "name": "synthetic clicks rejected",
+      "passed": true
+    },
+    {
+      "name": "normal images before click",
+      "requests": 8,
+      "pageBlocked": 8,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single image click",
+      "requests": 9,
+      "pageBlocked": 8,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "second tab remains blocked",
+      "requests": 10,
+      "pageBlocked": 9,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "duplicate occurrence isolation",
+      "requests": 11,
+      "pageBlocked": 10,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "forged window messages rejected",
+      "passed": true
+    },
+    {
+      "name": "A OFF / C ON / B ON",
+      "requests": 6,
+      "pageBlocked": 4,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "A ON / C OFF / B ON",
+      "requests": 4,
+      "pageBlocked": 0,
+      "authorizedAssets": 3,
+      "authorizedURLVariants": 3,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "A ON / C ON / B OFF",
+      "requests": 10,
+      "pageBlocked": 8,
+      "authorizedAssets": 2,
+      "authorizedURLVariants": 2,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "settings propagate across tabs",
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C ON / B ON",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C ON / B OFF",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C OFF / B ON",
+      "settings": {
+        "a": true,
+        "c": false,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C OFF / B OFF",
+      "settings": {
+        "a": true,
+        "c": false,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C ON / B ON",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C ON / B OFF",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C OFF / B ON",
+      "settings": {
+        "a": false,
+        "c": false,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C OFF / B OFF",
+      "settings": {
+        "a": false,
+        "c": false,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "eight settings combinations keep page requests blocked",
+      "requests": 11,
+      "pageBlocked": 0,
+      "authorizedAssets": 3,
+      "authorizedURLVariants": 3,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "normal video before click",
+      "requests": 1,
+      "pageBlocked": 1,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single video playback and seeking",
+      "requests": 6,
+      "pageBlocked": 2,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        206
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "quote before click",
+      "requests": 4,
+      "pageBlocked": 4,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single quoted image",
+      "requests": 6,
+      "pageBlocked": 5,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "worker stop and reconnect",
+      "passed": true
+    },
+    {
+      "name": "SPA and Back reset grants",
+      "passed": true
+    }
+  ],
+  "gaps": [
+    "Browser restart",
+    "Additional surfaces and media families",
+    "Adaptive HLS/quality switching: uses native progressive MP4 instead"
+  ],
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 1,
+  "siteWorkerControlled": true,
+  "passed": true
+}

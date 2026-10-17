@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {"type": "block"},
+    "condition": {
+      "initiatorDomains": ["x.com", "twitter.com"],
+      "regexFilter": "^https?://pbs\\.twimg\\.com/(media|tweet_video_thumb|ext_tw_video_thumb|amplify_video_thumb)/"
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {"type": "block"},
+    "condition": {"initiatorDomains": ["x.com", "twitter.com"], "requestDomains": ["video.twimg.com"]}
+  }
+]

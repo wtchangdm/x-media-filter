@@ -1,0 +1,81 @@
+{
+  "version": "0.1.0",
+  "mode": "normal",
+  "results": [
+    {
+      "name": "custom-cover before click",
+      "passed": true,
+      "authorizedAssets": 0,
+      "pageBlocked": 1,
+      "statuses": []
+    },
+    {
+      "name": "custom-cover single video playback and seek",
+      "passed": true,
+      "authorizedAssets": 1,
+      "pageBlocked": 1,
+      "statuses": [
+        206
+      ]
+    },
+    {
+      "name": "custom-cover reload before automatic eligibility",
+      "passed": true,
+      "authorizedAssets": 0,
+      "pageBlocked": 4,
+      "statuses": []
+    },
+    {
+      "name": "custom-cover automatic loading",
+      "passed": true,
+      "authorizedAssets": 1,
+      "pageBlocked": 0,
+      "statuses": [
+        206
+      ]
+    },
+    {
+      "name": "custom-cover category revocation",
+      "passed": true
+    },
+    {
+      "name": "encoded-thumbnail before click",
+      "passed": true,
+      "authorizedAssets": 0,
+      "pageBlocked": 1,
+      "statuses": []
+    },
+    {
+      "name": "encoded-thumbnail single video playback and seek",
+      "passed": true,
+      "authorizedAssets": 1,
+      "pageBlocked": 1,
+      "statuses": [
+        206
+      ]
+    },
+    {
+      "name": "encoded-thumbnail reload before automatic eligibility",
+      "passed": true,
+      "authorizedAssets": 0,
+      "pageBlocked": 2,
+      "statuses": []
+    },
+    {
+      "name": "encoded-thumbnail automatic loading",
+      "passed": true,
+      "authorizedAssets": 1,
+      "pageBlocked": 0,
+      "statuses": [
+        206
+      ]
+    },
+    {
+      "name": "encoded-thumbnail category revocation",
+      "passed": true
+    }
+  ],
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 1,
+  "passed": true
+}

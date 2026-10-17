@@ -1,0 +1,45 @@
+{
+  "browser": "Chrome/155.0.8059.85",
+  "themes": [
+    {
+      "emulated": "light",
+      "background": "rgb(21, 32, 43)",
+      "scheme": "dark",
+      "noFooter": true,
+      "noHorizontalOverflow": true
+    },
+    {
+      "emulated": "dark",
+      "background": "rgb(21, 32, 43)",
+      "scheme": "dark",
+      "noFooter": true,
+      "noHorizontalOverflow": true
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "firstTabFocus": "a",
+  "a11y": {
+    "axeVersion": "4.12.1",
+    "counts": {
+      "inapplicable": 59,
+      "incomplete": 0,
+      "passes": 30,
+      "violations": 0
+    }
+  },
+  "settings": {
+    "a": true,
+    "c": true,
+    "b": true
+  },
+  "rulesets": [
+    "barrier"
+  ],
+  "redirectGuard": true,
+  "passed": true
+}

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "X Media Filter",
+  "version": "0.1.0",
+  "minimum_chrome_version": "128",
+  "description": "Filter X post media downloads with click-to-load image groups and videos.",
+  "icons": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"},
+  "permissions": ["storage", "declarativeNetRequest"],
+  "host_permissions": ["https://x.com/*", "https://*.x.com/*", "https://pbs.twimg.com/*", "https://video.twimg.com/*"],
+  "background": {"service_worker": "worker.js"},
+  "action": {"default_title": "X Media Filter", "default_popup": "popup.html", "default_icon": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"}},
+  "declarative_net_request": {"rule_resources": [{"id": "barrier", "enabled": true, "path": "rules.json"}]},
+  "content_scripts": [
+    {"matches": ["https://x.com/*", "https://*.x.com/*"], "js": ["bridge.js"], "run_at": "document_start", "world": "MAIN"},
+    {"matches": ["https://x.com/*", "https://*.x.com/*"], "js": ["policy.js", "content.js"], "css": ["content.css"], "run_at": "document_start"}
+  ],
+  "web_accessible_resources": [{"resources": ["player.html"], "matches": ["https://x.com/*", "https://*.x.com/*"]}],
+  "content_security_policy": {"extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src https://pbs.twimg.com; media-src https://video.twimg.com; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"}
+}

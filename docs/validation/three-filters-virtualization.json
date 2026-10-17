@@ -1,0 +1,14 @@
+{
+  "settings": {
+    "a": true,
+    "b": true,
+    "c": true
+  },
+  "browser": "Chrome/155.0.8059.85",
+  "oldNodeRemoved": true,
+  "restoredToNewNode": true,
+  "authorizedAssets": 1,
+  "authorizedURLVariants": 1,
+  "blockedPageRequests": 11,
+  "passed": true
+}

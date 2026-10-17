@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>X Media Filter</title><link rel="stylesheet" href="popup.css"></head>
+<body><main>
+  <h1>X Media Filter</h1><p id="help">ON blocks media downloads. On X, click a blocked image group to load its images, or a blocked video to load only that video.</p>
+  <label class="setting" for="a"><span><strong id="a-label">Filter media on post</strong><small id="a-help">The focused post, plus posts in timelines, profiles and search.</small></span><span class="control"><output id="a-state" for="a" aria-hidden="true">ON</output><input id="a" type="checkbox" role="switch" aria-labelledby="a-label" aria-describedby="a-help help" checked disabled><span class="track" aria-hidden="true"></span></span></label>
+  <label class="setting" for="c"><span><strong id="c-label">Filter media on author replies</strong><small id="c-help">Conversation replies and ancestors by the focused post’s author.</small></span><span class="control"><output id="c-state" for="c" aria-hidden="true">ON</output><input id="c" type="checkbox" role="switch" aria-labelledby="c-label" aria-describedby="c-help help" checked disabled><span class="track" aria-hidden="true"></span></span></label>
+  <label class="setting" for="b"><span><strong id="b-label">Filter media on non-author comments</strong><small id="b-help">Conversation replies and ancestors by other authors.</small></span><span class="control"><output id="b-state" for="b" aria-hidden="true">ON</output><input id="b" type="checkbox" role="switch" aria-labelledby="b-label" aria-describedby="b-help help" checked disabled><span class="track" aria-hidden="true"></span></span></label>
+  <p id="error" role="alert" hidden></p>
+</main><script src="policy.js"></script><script src="popup.js"></script></body></html>

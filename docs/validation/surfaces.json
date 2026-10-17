@@ -1,0 +1,100 @@
+{
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 1,
+  "settings": {
+    "a": true,
+    "b": true
+  },
+  "results": [
+    {
+      "name": "media viewer",
+      "avatars": 24,
+      "categories": [
+        "A",
+        "B"
+      ],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 10,
+      "viewer": true,
+      "requests": 12,
+      "outcome": "blocked placeholders",
+      "selectedImageLoaded": true
+    },
+    {
+      "name": "home",
+      "avatars": 23,
+      "categories": [
+        "A"
+      ],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 9,
+      "viewer": false,
+      "requests": 9,
+      "outcome": "blocked placeholders"
+    },
+    {
+      "name": "profile",
+      "avatars": 15,
+      "categories": [
+        "A"
+      ],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 6,
+      "viewer": false,
+      "requests": 7,
+      "outcome": "blocked placeholders"
+    },
+    {
+      "name": "media grid",
+      "avatars": 13,
+      "categories": [
+        "A"
+      ],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 7,
+      "viewer": false,
+      "requests": 7,
+      "outcome": "blocked placeholders"
+    },
+    {
+      "name": "search",
+      "avatars": 14,
+      "categories": [
+        "A"
+      ],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 6,
+      "viewer": false,
+      "requests": 6,
+      "outcome": "blocked placeholders"
+    },
+    {
+      "name": "bookmarks",
+      "avatars": 4,
+      "categories": [],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 0,
+      "viewer": false,
+      "requests": 0,
+      "outcome": "no media items available; not validated"
+    },
+    {
+      "name": "notifications",
+      "avatars": 4,
+      "categories": [],
+      "loaded": 0,
+      "siteWorker": true,
+      "slots": 0,
+      "viewer": false,
+      "requests": 0,
+      "outcome": "no media items available; not validated"
+    }
+  ],
+  "failures": []
+}

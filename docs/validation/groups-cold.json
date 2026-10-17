@@ -1,0 +1,26 @@
+{
+  "version": "0.1.0",
+  "mode": "cold",
+  "route": "https://x.com/OpenAIDevs/status/2110855382444704190",
+  "results": [
+    {
+      "name": "native album single click with duplicate/quote/tab isolation",
+      "passed": true,
+      "decodedImages": 3,
+      "authorizedAssets": 3,
+      "pageBlocked": 8,
+      "successfulURLVariants": 3,
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "name": "category revocation and reload reset",
+      "passed": true
+    }
+  ],
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 0,
+  "nativeImages": 3,
+  "passed": true
+}

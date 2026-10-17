@@ -1,0 +1,13 @@
+{
+  "browser": "Chrome/155.0.8059.85",
+  "surface": "popup.html opened as an extension page",
+  "axeVersion": "4.12.1",
+  "counts": {"passes": 30, "violations": 0, "incomplete": 0},
+  "keyboardFirstSwitch": "a",
+  "savedFilters": {"a": true, "b": true},
+  "enabledStaticRulesets": ["barrier"],
+  "redirectGuardInstalled": true,
+  "extensionManifestErrors": 0,
+  "extensionRuntimeErrors": 0,
+  "note": "Audits the popup document; native toolbar placement and all OS/theme combinations were not separately automated."
+}

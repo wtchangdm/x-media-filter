@@ -1,0 +1,10 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+*.har
+*.har.json
+*.auth-state.json
+*.log
+artifacts/
+extension/_metadata/

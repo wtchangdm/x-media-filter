@@ -1,0 +1,31 @@
+:root { color-scheme: dark; font: 14px/1.5 system-ui, -apple-system, sans-serif; background: #15202b; color: #f5f7f8; }
+* { box-sizing: border-box; }
+body { width: 360px; margin: 0; }
+main { padding: 22px; }
+h1 { font-size: 20px; letter-spacing: -.5px; margin: 0 0 8px; }
+p { color: #b2c0ca; margin: 0; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 21px 0; border-bottom: 1px solid #36454f; cursor: pointer; }
+strong { display: block; font-size: 14px; line-height: 1.4; }
+small { display: block; color: #b2c0ca; font-size: 12px; margin-top: 5px; }
+.control { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+output { width: 25px; font-size: 11px; font-weight: 700; color: #b2c0ca; }
+input { position: absolute; right: 0; width: 48px; height: 28px; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.track { display: block; width: 48px; height: 28px; border-radius: 99px; background: #7b8790; box-shadow: inset 0 0 0 1px #0001; }
+.track::after { content: ''; display: block; width: 22px; height: 22px; margin: 3px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0003; }
+input:checked + .track { background: #20b976; }
+input:checked + .track::after { transform: translateX(20px); }
+input:focus-visible + .track { outline: 3px solid #8cc7ff; outline-offset: 4px; }
+input:disabled + .track { opacity: .5; }
+#error { color: #ff9ca4; font-size: 12px; margin-top: 12px; }
+[hidden] { display: none !important; }
+@media (forced-colors: active) {
+  :root { background: Canvas; color: CanvasText; }
+  p, small, output { color: CanvasText; }
+  .setting { border-color: CanvasText; }
+  .track { forced-color-adjust: none; background: Canvas; border: 1px solid ButtonText; }
+  input:checked + .track { background: Highlight; }
+  .track::after { background: ButtonText; }
+  input:checked + .track::after { background: HighlightText; }
+  input:focus-visible + .track { outline-color: Highlight; }
+  #error { color: CanvasText; }
+}

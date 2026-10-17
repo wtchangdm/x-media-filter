@@ -1,0 +1,272 @@
+{
+  "version": "0.1.0",
+  "mode": "cold",
+  "results": [
+    {
+      "name": "synthetic clicks rejected",
+      "passed": true
+    },
+    {
+      "name": "cold images before click",
+      "requests": 11,
+      "pageBlocked": 11,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single image click",
+      "requests": 12,
+      "pageBlocked": 11,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 1,
+      "bytes": 56680
+    },
+    {
+      "name": "second tab remains blocked",
+      "requests": 15,
+      "pageBlocked": 14,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 1,
+      "bytes": 56680
+    },
+    {
+      "name": "duplicate occurrence isolation",
+      "requests": 16,
+      "pageBlocked": 15,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 1,
+      "bytes": 56680
+    },
+    {
+      "name": "forged window messages rejected",
+      "passed": true
+    },
+    {
+      "name": "A OFF / C ON / B ON",
+      "requests": 3,
+      "pageBlocked": 1,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 2,
+      "bytes": 113693
+    },
+    {
+      "name": "A ON / C OFF / B ON",
+      "requests": 4,
+      "pageBlocked": 0,
+      "authorizedAssets": 3,
+      "authorizedURLVariants": 3,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 4,
+      "bytes": 338417
+    },
+    {
+      "name": "A ON / C ON / B OFF",
+      "requests": 8,
+      "pageBlocked": 6,
+      "authorizedAssets": 2,
+      "authorizedURLVariants": 2,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 2,
+      "bytes": 138730
+    },
+    {
+      "name": "settings propagate across tabs",
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C ON / B ON",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C ON / B OFF",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C OFF / B ON",
+      "settings": {
+        "a": true,
+        "c": false,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A ON / C OFF / B OFF",
+      "settings": {
+        "a": true,
+        "c": false,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C ON / B ON",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C ON / B OFF",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C OFF / B ON",
+      "settings": {
+        "a": false,
+        "c": false,
+        "b": true
+      },
+      "passed": true
+    },
+    {
+      "name": "independent settings: A OFF / C OFF / B OFF",
+      "settings": {
+        "a": false,
+        "c": false,
+        "b": false
+      },
+      "passed": true
+    },
+    {
+      "name": "eight settings combinations keep page requests blocked",
+      "requests": 11,
+      "pageBlocked": 0,
+      "authorizedAssets": 3,
+      "authorizedURLVariants": 3,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 11,
+      "bytes": 727110
+    },
+    {
+      "name": "cold video before click",
+      "requests": 1,
+      "pageBlocked": 1,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single video playback and seeking",
+      "requests": 6,
+      "pageBlocked": 2,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        206
+      ],
+      "credentialChecks": 4,
+      "bytes": 2967489
+    },
+    {
+      "name": "cold custom-cover video before click",
+      "requests": 2,
+      "pageBlocked": 2,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single custom-cover video playback and seeking",
+      "requests": 7,
+      "pageBlocked": 2,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        206
+      ],
+      "credentialChecks": 5,
+      "bytes": 4041340
+    },
+    {
+      "name": "custom-cover automatic eligibility and revocation",
+      "passed": true,
+      "note": "This earlier check retained a manual grant through filter OFF and proves revocation, not independent automatic eligibility. The focused videos-cold/normal reports prove automatic loading after reload."
+    },
+    {
+      "name": "quote before click",
+      "requests": 8,
+      "pageBlocked": 8,
+      "authorizedAssets": 0,
+      "authorizedURLVariants": 0,
+      "statuses": [],
+      "credentialChecks": 0,
+      "bytes": 0
+    },
+    {
+      "name": "single quoted image",
+      "requests": 9,
+      "pageBlocked": 8,
+      "authorizedAssets": 1,
+      "authorizedURLVariants": 1,
+      "statuses": [
+        200
+      ],
+      "credentialChecks": 1,
+      "bytes": 58183
+    },
+    {
+      "name": "worker stop and reconnect",
+      "passed": true
+    },
+    {
+      "name": "SPA and Back reset grants",
+      "passed": true
+    }
+  ],
+  "gaps": [
+    "Browser restart",
+    "Additional surfaces and media families",
+    "Adaptive HLS/quality switching: uses native progressive MP4 instead"
+  ],
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 0,
+  "siteWorkerControlled": false,
+  "passed": true
+}
