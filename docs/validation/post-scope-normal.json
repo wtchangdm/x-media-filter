@@ -1,0 +1,69 @@
+{
+  "version": "0.1.0",
+  "mode": "normal",
+  "routes": [
+    "https://x.com/<test-profile>",
+    "https://x.com/<test-profile>/photo",
+    "https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1"
+  ],
+  "results": [
+    {
+      "name": "non-post photo/video/dialog DOM fixtures remain visible",
+      "passed": true
+    },
+    {
+      "name": "profile avatar click",
+      "passed": true,
+      "covered": false,
+      "decoded": true,
+      "profile": true,
+      "route": "/<test-profile>/photo",
+      "slots": 0,
+      "statusScope": false,
+      "visible": true,
+      "profileResponses": 8
+    },
+    {
+      "name": "direct avatar startup",
+      "passed": true,
+      "covered": false,
+      "decoded": true,
+      "profile": true,
+      "route": "/<test-profile>/photo",
+      "slots": 0,
+      "statusScope": false,
+      "visible": true,
+      "profileResponses": 2
+    },
+    {
+      "name": "direct post viewer blocks until click",
+      "passed": true,
+      "loaded": 0,
+      "nativeHidden": true,
+      "placeholderVisible": true,
+      "statusScope": true,
+      "pageBlocked": 14,
+      "authorizedAssets": 1
+    },
+    {
+      "name": "avatar after post-viewer SPA navigation",
+      "passed": true,
+      "covered": false,
+      "decoded": true,
+      "profile": true,
+      "route": "/<test-profile>/photo",
+      "slots": 0,
+      "statusScope": false,
+      "visible": true,
+      "profileResponses": 7
+    }
+  ],
+  "settings": {
+    "a": true,
+    "c": true,
+    "b": true
+  },
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 1,
+  "passed": true
+}

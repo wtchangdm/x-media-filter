@@ -39,6 +39,8 @@
     } catch { disconnect(); }
   }
   function context() {
+    // X reuses the swipe viewer for avatars/banners, not just post attachments.
+    document.documentElement?.toggleAttribute("data-xmf-status", !!P.statusId(location.href));
     const next = P.routeKey(location.href);
     if (next === route) {
       if (locationURL !== location.href) { locationURL = location.href; queue(document); }
@@ -170,6 +172,7 @@
       relationship: relationship(item.postId)});
   }
   function descriptor(element) {
+    if (element.matches('[data-testid="swipe-to-dismiss"]') && !P.statusId(location.href)) return null;
     const article = element.closest('article[data-testid="tweet"]');
     let owner = outerPost(article);
     // Media grids and viewers may not contain an article. Their status link is an item boundary.
@@ -259,7 +262,7 @@
       const desc = descriptor(element);
       let item = items.get(element);
       if (!desc) {
-        if (item) { reset(item); item.host.remove(); items.delete(element); }
+        if (item) { reset(item); item.host.remove(); element.removeAttribute("data-xmf-covered"); items.delete(element); }
         continue;
       }
       if (item && (item.base !== desc.base || item.kind !== desc.kind || item.boundaryNonce !== desc.boundaryNonce)) {
@@ -299,7 +302,7 @@
     const identities = new Map();
     const imageGroups = new Map();
     for (const [element, item] of items) {
-      if (!element.isConnected) { reset(item); items.delete(element); continue; }
+      if (!element.isConnected) { reset(item); element.removeAttribute("data-xmf-covered"); items.delete(element); continue; }
       if (item.kind === "image") {
         const key = item.boundaryNonce + "|" + item.attachmentPost;
         if (!imageGroups.has(key)) imageGroups.set(key, []);
@@ -419,5 +422,5 @@
     if (!port) connect();
     post({type: "alive"});
   }, 20000);
-  connect(); queue(document);
+  context(); connect(); queue(document);
 })();

@@ -34,6 +34,22 @@ The store's own Item support visibility is a dashboard setting: it has not been 
 
 This is a documentation/repository-setting change only. Runtime, manifest, ZIP and browser behavior are unchanged. Verification is limited to static consistency/links, GitHub configuration/public document availability and the existing ZIP checksum, not a new application/browser regression.
 
+## Post-only UI scope and avatar zoom fix
+
+Reproduced on `https://x.com/<test-profile>`: clicking the profile image opened a blank `/<test-profile>/photo` dialog. The image was already decoded, but the extension's global `swipe-to-dismiss` CSS hid its container. The native profile viewer shares that hook with post media; it is not itself evidence of a post attachment.
+
+Cached-pixel CSS now scopes photo/video containers to tweet articles/status links and the swipe viewer to a current status route. A document-root marker updates at startup and on SPA navigation; the adapter also rejects non-status swipe viewers and removes stale coverage when ownership is lost or an element detaches. No DNR rule, media destination, grant scope, permission or loader behavior was broadened. The network barrier still recognizes CDN delivery families rather than DOM ownership; unrelated X features reusing those families are not proven unaffected.
+
+Existing **Chrome 155.0.8059.85**, extension **0.1.0**, all A/C/B filters ON during checks:
+
+- [Normal scope regression](validation/post-scope-normal.json) and [cold scope regression](validation/post-scope-cold.json): actual avatar clicks, direct avatar-page reloads and real SPA navigation from the post viewer through Profile to avatar zoom all show decoded, visible native images with HTTP 200 profile-image responses and no extension placeholder. Non-post `tweetPhoto`, `videoPlayer` and swipe DOM fixtures stay visible; those controlled fixtures test UI scope, not network prevention.
+- The native [post viewer](https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1) retains a visible placeholder and hidden native pixels. Before selection, zero post-media responses succeed; **14 normal / 20 cold** page attempts are canceled with `net::ERR_BLOCKED_BY_CLIENT`. A trusted click then decodes the selected canonical image through extension-owned renderers; page-origin attempts remain canceled. Initial harness attempts had click-target/activation and Close-navigation timeouts. The final procedure waits for the rendered focused post and gallery hydration, clicks the visible placeholder, and uses X's native Close button before SPA navigation.
+- [Normal grouped-image regression](validation/post-scope-groups-normal.json): the native OpenAIDevs three-image group decodes exactly three authorized canonical assets (HTTP 200), with **12** page requests canceled. Controlled quote/duplicate occurrences, unselected media and a second native tab remain blocked; revocation/reload pass.
+- [Normal video regression](validation/post-scope-videos-normal.json): both GitHub's custom-cover and the encoded-thumbnail video remain blocked before click, with no successful pre-click media/segment responses. Each selected MP4 returns HTTP **206**, plays and seeks to **40 seconds**; duplicate-occurrence isolation, reload revocation, independent A-OFF loading and A-ON revocation pass.
+- **82** offline tests and `node tests/check.mjs` pass. Settings and test-target cache/site-worker controls are restored. Normal capture observes the active X site worker; cold mode disables HTTP cache and bypasses it only on test targets, without clearing profile/site storage.
+
+These are focused regressions, not a new full-surface/eight-setting browser pass. The supplied profile has no banner, so native banner zoom was not directly exercised; it uses the same route exclusion but remains a live-fixture gap. Full-browser restart, additional X surfaces and video delivery families retain the limitations below. The earlier release ZIP predates this runtime fix and was not regenerated.
+
 ## Player disconnect ownership fix
 
 A rejected replay renderer could disconnect and delete the active renderer's entry from the worker's `players` map, preventing later worker-side `stop` delivery. Disconnect cleanup now removes an entry only if it belongs to that port. Three protocol regressions cover replay rejection/disconnection followed by settings, context or explicit revocation. All three failed before the fix and pass afterward. These are mocked-protocol results, not a real-browser replay/exploit demonstration. BFCache behavior was not changed.

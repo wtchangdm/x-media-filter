@@ -1,4 +1,6 @@
 /* This hides cached pixels only. The packaged DNR rules are the network barrier. */
-[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="swipe-to-dismiss"] { visibility: hidden !important; }
+:is(article[data-testid="tweet"], a[href*="/status/"]) :is([data-testid="tweetPhoto"], [data-testid="videoPlayer"]),
+:root[data-xmf-status] [data-testid="swipe-to-dismiss"],
+[data-xmf-covered] { visibility: hidden !important; }
 [data-xmf-covered] { isolation: isolate; }
 xmf-slot { visibility: visible !important; position: absolute !important; inset: 0 !important; z-index: 3 !important; display: block !important; min-height: 80px; }
