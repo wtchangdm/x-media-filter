@@ -60,8 +60,9 @@ Support uses documentation and the verified developer contact email shown on the
 ## Image upload order
 
 1. [Actual settings screenshot, 1280×800](../../assets/store/exports/screenshot-settings-1280x800.png): actual UI centered using its existing document background, then resized; no overlays. Shows saved all-ON settings, not fresh defaults.
-2. Required [small promo, 440×280](../../assets/store/exports/small-promo-440x280.png): cropped from the supplied square cat image.
-3. Optional [marquee, 1400×560](../../assets/store/exports/marquee-media-filter-1400x560.png): minimally cropped/resized from the supplied wide image.
-4. Store icon: [existing runtime icon, 128×128](../../extension/icons/icon-128.png).
+2. Additional [focused-post screenshot, 640×400](../../assets/store/exports/screenshot-openai-post-640x400.png): complete OpenAIDevs post captured from the user-supplied route, fitted with black side margins. Upload under Screenshots, not Marquee.
+3. Required [small promo, 440×280](../../assets/store/exports/small-promo-440x280.png): cropped from the supplied square cat image.
+4. Optional [marquee illustration, 1400×560](../../assets/store/exports/marquee-media-filter-1400x560.png), or leave the marquee slot empty.
+5. Store icon: [existing runtime icon, 128×128](../../extension/icons/icon-128.png).
 
-The supplied illustration is promotional artwork, not a screenshot of the extension. All supplied artwork was generated with ChatGPT, as confirmed by the user. The former custom text/layout compositions have been removed; promos use only direct crops/resizing, and the screenshot centers intact captured UI using its existing background. Final crop/listing approval is pending. No YouTube video is prepared or necessary for the minimum image deliverables; the official image requirements identify icon, small promo and at least one screenshot as mandatory.
+The supplied illustration is promotional artwork, not a screenshot of the extension. The original illustrations/icon were generated with ChatGPT, as confirmed by the user; browser UI captures are actual screenshots. The former custom text/layout compositions have been removed; illustrated promos use direct crops/resizing; the settings screenshot centers intact captured UI, and the focused-post screenshot preserves its full captured article with matching black side margins. Final crop/listing approval is pending. No YouTube video is prepared or necessary for the minimum image deliverables; the official image requirements identify icon, small promo and at least one screenshot as mandatory.

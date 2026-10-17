@@ -26,14 +26,20 @@ for (const size of [16, 32, 48, 128]) {
 }
 for (const [file, width, height] of [
   ['assets/store/captures/popup-0.1.0.png', 1472, 920],
+  ['assets/store/captures/openai-focused-post.png', 1078, 1252],
   ['assets/store/exports/small-promo-440x280.png', 440, 280],
   ['assets/store/exports/marquee-media-filter-1400x560.png', 1400, 560],
+  ['assets/store/exports/screenshot-openai-post-640x400.png', 640, 400],
   ['assets/store/exports/screenshot-settings-1280x800.png', 1280, 800],
 ]) {
   const png = await readFile(file);
   assert.equal(png.subarray(1, 4).toString(), 'PNG', file);
   assert.equal(png.readUInt32BE(16), width, file);
   assert.equal(png.readUInt32BE(20), height, file);
+  if (file.includes('/exports/')) {
+    assert.equal(png[24], 8, file + ': expected 8-bit channels');
+    assert.equal(png[25], 2, file + ': expected RGB PNG without alpha');
+  }
 }
 assert.ok(manifest.description.length <= 132);
 assert.deepEqual(manifest.web_accessible_resources[0].resources, ['player.html']);

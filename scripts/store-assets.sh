@@ -16,3 +16,7 @@ ffmpeg -v error -y -i assets/store/marquee-media-filter.png \
 ffmpeg -v error -y -i assets/store/captures/popup-0.1.0.png \
   -filter_complex '[0:v]format=rgb24,split=3[a][b][c];[a]crop=376:920:720:0[left];[b]crop=720:920:0:0[ui];[c]crop=376:920:1096:0[right];[left][ui][right]hstack=inputs=3,scale=1280:800:flags=lanczos,format=rgb24' -frames:v 1 \
   assets/store/exports/screenshot-settings-1280x800.png
+# Fit the complete focused post into a screenshot, preserving its page's black background.
+ffmpeg -v error -y -i assets/store/captures/openai-focused-post.png \
+  -vf 'scale=-2:400:flags=lanczos,pad=640:400:(ow-iw)/2:0:color=black,format=rgb24' -frames:v 1 \
+  assets/store/exports/screenshot-openai-post-640x400.png

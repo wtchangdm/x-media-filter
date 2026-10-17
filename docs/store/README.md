@@ -28,7 +28,8 @@
 | Reviewer test instructions | [reviewer-notes.en.md](reviewer-notes.en.md) |
 | User support and troubleshooting | [SUPPORT.md](../../SUPPORT.md) |
 | Required images | [440×280 small promo](../../assets/store/exports/small-promo-440x280.png), [1280×800 actual UI screenshot](../../assets/store/exports/screenshot-settings-1280x800.png), [128×128 icon](../../extension/icons/icon-128.png) |
-| Optional marquee | [1400×560 supplied wide illustration](../../assets/store/exports/marquee-media-filter-1400x560.png) |
+| Additional screenshot | [640×400 focused OpenAIDevs post](../../assets/store/exports/screenshot-openai-post-640x400.png), complete post with black side margins |
+| Optional marquee | [1400×560 wide illustration](../../assets/store/exports/marquee-media-filter-1400x560.png), or leave the marquee slot empty. The 640×400 post belongs in Screenshots, not Marquee. |
 
 The ZIP contains **17 runtime files plus the MIT `LICENSE` notice** (18 files total), with `manifest.json` at its root. It excludes Chrome-generated `_metadata/`, source artwork, store images, tests, docs and browser/account data. The packager refuses unknown runtime files or symlinks; `_metadata/` and `.DS_Store` are explicitly excluded. `artifacts/` is already ignored.
 
@@ -45,7 +46,7 @@ python3 scripts/package.py
 
 The packager reads back the archive and verifies CRC, inventory and each source-file hash. ZIP order, permissions and timestamps are fixed. The same source/environment reproduces the same bytes; different zlib versions may produce different compressed bytes.
 
-Optional image preparation: `sh scripts/store-assets.sh`, using an already-installed `ffmpeg`. It crops/resizes promotional images and centers the screenshot's intact UI between equal strips of its existing document background. It adds no text, generated backgrounds or graphics. Pre-generated PNGs are included, so the extension does not need this tool. Crop coordinates and actual screenshot provenance are in [assets/README.md](../../assets/README.md).
+Optional image preparation: `sh scripts/store-assets.sh`, using an already-installed `ffmpeg`. It crops/resizes illustrated promos, centers the settings screenshot's intact UI, and fits the complete focused-post capture into 640×400 with black side margins matching its page. It adds no text or new graphics. Pre-generated PNGs are included, so the extension does not need this tool. Crop coordinates and actual screenshot provenance are in [assets/README.md](../../assets/README.md).
 
 ## What “publisher account status” means
 
