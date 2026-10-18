@@ -1,0 +1,122 @@
+{
+  "version": "0.1.0",
+  "mode": "normal",
+  "scope": "all",
+  "results": [
+    {
+      "name": "existing image thread manual native enlargement",
+      "route": "https://x.com/ArtificialAnlys/status/2110893784422908225",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 702.0052490234375,
+        "visible": true,
+        "width": 1330.0001220703125
+      },
+      "successfulResponses": 2,
+      "authorizedAssets": 1,
+      "pageBlocked": 4
+    },
+    {
+      "name": "real decode-error Retry returns keyboard focus to native photo link",
+      "passed": true
+    },
+    {
+      "name": "existing image thread automatic native enlargement by keyboard",
+      "route": "https://x.com/ArtificialAnlys/status/2110893784422908225",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 702.0052490234375,
+        "visible": true,
+        "width": 1330.0001220703125
+      },
+      "successfulResponses": 2,
+      "authorizedAssets": 1,
+      "pageBlocked": 5
+    },
+    {
+      "name": "real decode-error Retry returns keyboard focus to native viewer Close",
+      "passed": true
+    },
+    {
+      "name": "home manual native enlargement",
+      "route": "https://x.com/home",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 702.0052490234375,
+        "visible": true,
+        "width": 1330.0001220703125
+      },
+      "successfulResponses": 3,
+      "authorizedAssets": 1,
+      "pageBlocked": 20
+    },
+    {
+      "name": "home automatic native enlargement",
+      "route": "https://x.com/home",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 702.0052490234375,
+        "visible": true,
+        "width": 1330.0001220703125
+      },
+      "successfulResponses": 4,
+      "authorizedAssets": 2,
+      "pageBlocked": 10
+    },
+    {
+      "name": "native 4-image next/previous, revocation, direct viewer reload and manual group selection",
+      "route": "https://x.com/Cloudflare/status/2111522160153882734",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "authorizedAssets": 4,
+      "directSelections": [
+        {
+          "photo": 2,
+          "successfulResponses": 1,
+          "authorizedAssets": 1,
+          "completedImageRequests": 1,
+          "pageBlocked": 3
+        },
+        {
+          "photo": 3,
+          "successfulResponses": 1,
+          "authorizedAssets": 1,
+          "completedImageRequests": 1,
+          "pageBlocked": 2
+        }
+      ]
+    }
+  ],
+  "browser": "Chrome/155.0.8059.85",
+  "observedSiteWorkerTargets": 1,
+  "lastPointerReadinessWaitMs": 400,
+  "passed": true
+}

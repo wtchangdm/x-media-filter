@@ -5,7 +5,11 @@ const port = chrome.runtime.connect({name: "player"});
 let media;
 let source;
 let stopped = false;
+function imageState(ready) {
+  if (source?.kind === "image") parent.postMessage({type: "xmf-image-state", ready}, "*");
+}
 function stop() {
+  imageState(false);
   stopped = true; source = null;
   if (media) {
     if (media.tagName === "VIDEO") media.pause();
@@ -17,6 +21,7 @@ function stop() {
 }
 function load() {
   if (stopped || !source) return;
+  imageState(false);
   media?.remove();
   media = document.createElement(source.kind === "video" ? "video" : "img");
   // Anonymous CORS excludes cross-origin cookies. The CDN must support CORS.
@@ -26,8 +31,10 @@ function load() {
   } else media.alt = "Selected post image";
   media.addEventListener(source.kind === "video" ? "loadedmetadata" : "load", () => {
     status.hidden = true; retry.hidden = true;
+    imageState(true);
   });
   media.addEventListener("error", () => {
+    imageState(false);
     status.hidden = false; status.textContent = "Could not load selected media."; retry.hidden = false;
   });
   status.textContent = "Loading selected media…"; status.hidden = false; retry.hidden = true;

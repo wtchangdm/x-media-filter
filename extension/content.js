@@ -18,6 +18,74 @@
   let port;
   let scheduled = false;
   let articleSequence = 0;
+  let viewerHandoff = null;
+  let viewerGrant = null;
+  const viewerIdentities = new Set();
+  let viewerRetryTimer;
+
+  function clearViewerGrants() {
+    viewerGrant = null;
+    if (!viewerIdentities.size) return;
+    for (const identity of viewerIdentities) manual.delete(identity);
+    for (const item of items.values()) if (viewerIdentities.has(item.identity)) reset(item);
+    viewerIdentities.clear();
+  }
+
+  function retryViewer(attempt = 0, path = location.pathname) {
+    clearTimeout(viewerRetryTimer);
+    if (!/\/photo\/\d+$/.test(path) || attempt >= 10) return;
+    viewerRetryTimer = setTimeout(() => {
+      if (location.pathname !== path) return;
+      queue(document.querySelector('[role="dialog"]'));
+      retryViewer(attempt + 1, path);
+    }, 150);
+  }
+  function selectedViewer(element, mediaIndex) {
+    if (mediaIndex !== Number(location.pathname.match(/\/photo\/(\d+)$/)?.[1]) - 1) return false;
+    // X mounts offscreen slides too. Never grant those or a sidebar/duplicate occurrence.
+    const selected = [...document.querySelectorAll('[role="dialog"] [data-testid="swipe-to-dismiss"]')].filter(candidate => {
+      const box = candidate.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.left >= -1 && box.right <= innerWidth + 1 &&
+        box.top < innerHeight && box.bottom > 0;
+    });
+    return selected.length === 1 && selected[0] === element;
+  }
+  function imageKey(item) { return item.mediaIndex + "|" + P.assetKey(item.poster); }
+  function prepareViewer(item, link) {
+    if (item.kind !== "image" || !item.imageReady || !item.frame ||
+        link.origin !== location.origin || P.statusId(link.href) !== item.attachmentPost ||
+        !link.pathname.endsWith("/photo/" + (item.mediaIndex + 1))) return;
+    const assets = new Set();
+    for (const candidate of items.values()) {
+      if (candidate.kind === "image" && candidate.boundaryNonce === item.boundaryNonce &&
+          candidate.attachmentPost === item.attachmentPost && candidate.poster &&
+          (manual.has(candidate.identity) || !P.blocked(settings, category(candidate)))) assets.add(imageKey(candidate));
+    }
+    viewerHandoff = {path: link.pathname, route: P.routeKey(link.href), assets,
+      category: category(item), expires: Date.now() + 5000};
+  }
+  function updateViewer(next) {
+    if (viewerHandoff?.expires < Date.now()) viewerHandoff = null;
+    if (locationURL !== location.href && viewerHandoff) {
+      clearViewerGrants();
+      viewerGrant = location.pathname === viewerHandoff.path && next === viewerHandoff.route
+        ? {...viewerHandoff, dialog: null} : null;
+      viewerHandoff = null;
+    }
+    if (!/\/photo\/\d+$/.test(location.pathname) || (next !== route && viewerGrant?.route !== next) ||
+        (viewerGrant && (next !== viewerGrant.route ||
+        (viewerGrant.dialog ? !viewerGrant.dialog.isConnected : viewerGrant.expires < Date.now())))) clearViewerGrants();
+  }
+  function inheritViewer(item) {
+    if (!viewerGrant || item.kind !== "image" || !item.poster || !viewerGrant.assets.has(imageKey(item)) ||
+        P.statusId(location.href) !== item.attachmentPost || !item.element.matches('[data-testid="swipe-to-dismiss"]')) return;
+    const dialog = item.element.closest('[role="dialog"]');
+    if (!dialog || (viewerGrant.dialog && viewerGrant.dialog !== dialog)) return;
+    if (!selectedViewer(item.element, item.mediaIndex)) return;
+    viewerGrant.dialog = dialog;
+    viewerIdentities.add(item.identity);
+    manual.set(item.identity, category(item));
+  }
 
   function post(msg) {
     try { port?.postMessage(msg); } catch { disconnect(); }
@@ -42,6 +110,8 @@
     // X reuses the swipe viewer for avatars/banners, not just post attachments.
     document.documentElement?.toggleAttribute("data-xmf-status", !!P.statusId(location.href));
     const next = P.routeKey(location.href);
+    updateViewer(next);
+    if (locationURL !== location.href) retryViewer();
     if (next === route) {
       if (locationURL !== location.href) { locationURL = location.href; queue(document); }
       return;
@@ -59,6 +129,8 @@
     const turnedOn = cat => cat === "A" ? (!previous.a && settings.a) : cat === "C" ? (!previous.c && settings.c) :
       cat === "B" ? (!previous.b && settings.b) :
       (!previous.a && settings.a) || (!previous.c && settings.c) || (!previous.b && settings.b);
+    if (viewerHandoff && (turnedOn(viewerHandoff.category) || turnedOn("A"))) viewerHandoff = null;
+    if (viewerGrant && (turnedOn(viewerGrant.category) || turnedOn("A"))) clearViewerGrants();
     for (const [identity, cat] of manual) if (turnedOn(cat)) manual.delete(identity);
     for (const item of items.values()) if (turnedOn(category(item))) reset(item);
     queue(document);
@@ -107,7 +179,7 @@
   function reset(item) {
     post({type: "revoke", id: item.id});
     item.id = crypto.randomUUID(); item.workerCategory = undefined;
-    item.frame?.remove(); item.frame = null; item.pending = false;
+    item.frame?.remove(); item.frame = null; item.pending = false; item.imageReady = false;
     item.button.disabled = false;
     item.button.textContent = blockedLabel(item);
     if (item.shadow.firstElementChild !== item.style || !item.button.isConnected)
@@ -116,17 +188,21 @@
   function authorize(item, clicked = false) {
     context();
     if (item.pending || item.frame || !item.element.isConnected) return;
-    if (!port) connect();
-    if (!port) { item.button.textContent = "Extension unavailable — reload this X tab to retry"; return; }
     const src = item.kind === "video" ? item.video : item.poster;
     if (!src) {
       item.button.textContent = "Media source unavailable — waiting for X metadata. Click to retry.";
       return;
     }
     if (clicked) {
+      if (item.kind === "image" && item.element.matches('[data-testid="swipe-to-dismiss"]')) viewerIdentities.add(item.identity);
       manual.set(item.identity, category(item));
       if (manual.size > 1000) manual.delete(manual.keys().next().value);
     }
+    // Remember a direct viewer click for the image group, but fetch only the selected slide.
+    if (item.kind === "image" && item.element.matches('[data-testid="swipe-to-dismiss"]') &&
+        !selectedViewer(item.element, item.mediaIndex)) return;
+    if (!port) connect();
+    if (!port) { item.button.textContent = "Extension unavailable — reload this X tab to retry"; return; }
     item.workerCategory = category(item);
     item.pending = true; item.button.disabled = true; item.button.textContent = "Loading selected media…";
     post({type: "grant", id: item.id, epoch, url: src, kind: item.kind,
@@ -200,7 +276,10 @@
       .filter(e => !e.parentElement?.closest(selector));
     const isViewer = element.matches('[data-testid="swipe-to-dismiss"]');
     const linkIndex = (isViewer ? location.pathname : link?.pathname)?.match(/\/(?:photo|video)\/(\d+)/)?.[1];
-    const mediaIndex = linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
+    const slide = isViewer && /\/photo\/\d+$/.test(location.pathname) && element.closest('li[role="listitem"]');
+    const slideIndex = slide && slide.parentElement?.getAttribute("role") === "list"
+      ? [...slide.parentElement.children].indexOf(slide) : -1;
+    const mediaIndex = slideIndex >= 0 ? slideIndex : linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
     const cached = items.get(element);
     const metadata = posts.get(attachmentPost)?.media || [];
     const poster = domPoster ||
@@ -239,13 +318,15 @@
     style.textContent = ':host{display:block;width:100%;height:100%;color-scheme:light dark}button{box-sizing:border-box;width:100%;height:100%;min-height:80px;border:0;border-radius:12px;background:#15202b;color:#f5f7f8;font:600 14px/1.5 system-ui;padding:16px;cursor:pointer}button:hover{background:#223746}button:focus-visible{outline:3px solid #60e0a7;outline-offset:-5px}iframe{width:100%;height:100%;border:0;border-radius:12px;display:block}';
     const button = document.createElement("button");
     button.type = "button";
-    const item = {...desc, id: crypto.randomUUID(), identity: desc.base + "|" + desc.occurrence, element, host, shadow, style, button, frame: null, pending: false};
-    host.addEventListener("click", event => event.stopPropagation());
+    const item = {...desc, localIdentity: crypto.randomUUID(), id: crypto.randomUUID(), identity: desc.base + "|" + desc.occurrence, element, host, shadow, style, button, frame: null, pending: false};
+    host.addEventListener("click", event => { if (!item.imageReady) event.stopPropagation(); });
     button.addEventListener("click", event => {
       event.preventDefault(); event.stopPropagation();
       if (event.isTrusted) activate(item);
     });
-    for (const type of ["pointerdown", "keydown"]) host.addEventListener(type, event => event.stopPropagation());
+    for (const type of ["pointerdown", "keydown"]) host.addEventListener(type, event => {
+      if (!item.imageReady) event.stopPropagation();
+    });
     if (getComputedStyle(element).position === "static") element.style.position = "relative";
     element.setAttribute("data-xmf-covered", "");
     shadow.append(style, button); element.append(host); items.set(element, item);
@@ -321,12 +402,14 @@
       if (group.length > 1) { ambiguousIdentities.add(proposed); manual.delete(proposed); }
       const ambiguous = ambiguousIdentities.has(proposed);
       for (const item of group) {
-        const identity = ambiguous ? item.base + "|dom:" + item.boundaryNonce : proposed;
+        const identity = ambiguous ? item.base + "|element:" + item.localIdentity : proposed;
         // Upgrade this existing DOM occurrence only; never merge two occurrences by URL.
         if (!ambiguous && item.identity !== identity && manual.has(item.identity)) {
           manual.set(identity, manual.get(item.identity)); manual.delete(item.identity);
+          if (viewerIdentities.delete(item.identity)) viewerIdentities.add(identity);
         }
         item.identity = identity;
+        inheritViewer(item);
         const cat = category(item);
         item.host.dataset.category = cat || "unknown";
         item.host.dataset.identity = item.occurrence.startsWith("react:") && !ambiguous ? "stable" : "document";
@@ -346,6 +429,33 @@
     const box = element.getBoundingClientRect();
     return box.width > 0 && box.height > 0 && box.top < innerHeight + 300 && box.bottom > -300;
   }
+  function imageState(event) {
+    if (!event.isTrusted || event.origin !== new URL(chrome.runtime.getURL("/")).origin ||
+        event.data?.type !== "xmf-image-state" || typeof event.data.ready !== "boolean") return;
+    const item = [...items.values()].find(item => item.kind === "image" && item.frame?.contentWindow === event.source);
+    if (!item || !item.element.isConnected) return;
+    item.imageReady = event.data.ready;
+    // Changing tab order does not move focus out of an already focused renderer.
+    if (item.imageReady && item.shadow.activeElement === item.frame) {
+      const target = item.element.closest('a[href*="/photo/"]') ||
+        item.element.closest('[role="dialog"]')?.querySelector('button[aria-label="Close"]');
+      target?.focus({preventScroll: true});
+    }
+    // Only decoded images pass input through; loading errors retain the renderer's Retry button.
+    item.frame.style.pointerEvents = item.imageReady ? "none" : "auto";
+    item.frame.tabIndex = item.imageReady ? -1 : 0;
+  }
+  // Keep X's real anchor and event handlers in charge of clicks, keyboard and history.
+  document.addEventListener("click", event => {
+    if (!event.isTrusted || event.defaultPrevented || event.button !== 0 ||
+        event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest?.('a[href*="/photo/"]');
+    if (!link) return;
+    context(); dirty.add(document); flush();
+    const item = [...items.values()].find(item => item.element.closest("a") === link && item.imageReady);
+    if (item) prepareViewer(item, link);
+  }, true);
+  addEventListener("message", imageState);
   let metadataPort;
   const bridgeNonce = crypto.randomUUID();
   addEventListener("message", event => {
@@ -412,7 +522,8 @@
   addEventListener("popstate", context);
   addEventListener("scroll", () => queue(null), {passive: true});
   addEventListener("pagehide", () => {
-    manual.clear(); ambiguousIdentities.clear(); epoch = crypto.randomUUID();
+    manual.clear(); ambiguousIdentities.clear(); viewerHandoff = null; clearViewerGrants(); epoch = crypto.randomUUID();
+    clearTimeout(viewerRetryTimer);
     for (const item of items.values()) reset(item);
     port?.disconnect();
   });
