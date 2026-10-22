@@ -1,0 +1,93 @@
+{
+  "version": "0.1.0",
+  "mode": "cold",
+  "scope": "single",
+  "results": [
+    {
+      "name": "image post manual native enlargement",
+      "route": "private-single-photo-fixture",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 1322.0052490234375,
+        "visible": true,
+        "width": 1072.994873046875
+      },
+      "successfulResponses": 2,
+      "authorizedAssets": 1,
+      "pageBlocked": 12
+    },
+    {
+      "name": "real decode-error Retry returns keyboard focus to native photo link",
+      "passed": true
+    },
+    {
+      "name": "image post automatic native enlargement by keyboard",
+      "route": "private-single-photo-fixture",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 1322.0052490234375,
+        "visible": true,
+        "width": 1072.994873046875
+      },
+      "successfulResponses": 2,
+      "authorizedAssets": 1,
+      "pageBlocked": 13
+    },
+    {
+      "name": "real decode-error Retry returns keyboard focus to native viewer Close",
+      "passed": true
+    },
+    {
+      "name": "single-photo direct startup selection",
+      "route": "private-single-photo-fixture/photo/1",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "pageBlocked": 18,
+      "selection": {
+        "photo": 1,
+        "successfulResponses": 1,
+        "authorizedAssets": 1,
+        "completedImageRequests": 1,
+        "pageBlocked": 0
+      }
+    },
+    {
+      "name": "single-photo direct reload selection",
+      "route": "private-single-photo-fixture/photo/1",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "pageBlocked": 16,
+      "selection": {
+        "photo": 1,
+        "successfulResponses": 1,
+        "authorizedAssets": 1,
+        "completedImageRequests": 1,
+        "pageBlocked": 0
+      }
+    }
+  ],
+  "browser": "Chrome/156.0.8078.48",
+  "observedSiteWorkerTargets": 0,
+  "lastPointerReadinessWaitMs": 83,
+  "passed": true
+}

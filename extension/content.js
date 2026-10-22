@@ -247,6 +247,19 @@
     return P.classify({focusId: focus, focusAuthor, postId: item.postId, postAuthor: item.author,
       relationship: relationship(item.postId)});
   }
+  function viewerMediaIndex(element, media) {
+    const slide = element.closest('li[role="listitem"]');
+    const list = slide?.parentElement;
+    if (list?.getAttribute("role") !== "list" || !media.length) return -1;
+    const slides = [...list.children];
+    let index = slides.indexOf(slide);
+    // X can pad its carousel with empty navigation slides (including single photos).
+    // They are not attachments and must never receive metadata or loader grants.
+    if (slides.length === media.length + 2 && [slides[0], slides.at(-1)].every(node =>
+      node.querySelector('[aria-label="placeholder"] img[src^="data:image/svg+xml,"]'))) index--;
+    else if (slides.length !== media.length) return -1;
+    return index >= 0 && index < media.length ? index : -1;
+  }
   function descriptor(element) {
     if (element.matches('[data-testid="swipe-to-dismiss"]') && !P.statusId(location.href)) return null;
     const article = element.closest('article[data-testid="tweet"]');
@@ -276,12 +289,12 @@
       .filter(e => !e.parentElement?.closest(selector));
     const isViewer = element.matches('[data-testid="swipe-to-dismiss"]');
     const linkIndex = (isViewer ? location.pathname : link?.pathname)?.match(/\/(?:photo|video)\/(\d+)/)?.[1];
-    const slide = isViewer && /\/photo\/\d+$/.test(location.pathname) && element.closest('li[role="listitem"]');
-    const slideIndex = slide && slide.parentElement?.getAttribute("role") === "list"
-      ? [...slide.parentElement.children].indexOf(slide) : -1;
-    const mediaIndex = slideIndex >= 0 ? slideIndex : linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
-    const cached = items.get(element);
     const metadata = posts.get(attachmentPost)?.media || [];
+    const mediaIndex = isViewer && /\/photo\/\d+$/.test(location.pathname)
+      ? viewerMediaIndex(element, metadata)
+      : linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
+    if (mediaIndex < 0) return null;
+    const cached = items.get(element);
     const poster = domPoster ||
       metadata[mediaIndex]?.poster || (cached?.postId === owner.id && cached.attachmentPost === attachmentPost && cached.mediaIndex === mediaIndex ? cached.poster : null);
     let attachment = metadata.find(entry => P.sameAsset(entry.poster, poster));

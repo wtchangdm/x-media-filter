@@ -12,7 +12,7 @@ assert.ok(source.indexOf(marker) > 0, "content startup boundary must exist");
 const testSource = source.slice(0, source.indexOf(marker)) + `
   globalThis.viewer = {
     items, manual, viewerIdentities, prepareViewer, inheritViewer, applySettings, context, authorize,
-    message, imageState, flush, activate,
+    message, imageState, flush, activate, viewerMediaIndex,
     get epoch() { return epoch; },
     get handoff() { return viewerHandoff; },
     get grant() { return viewerGrant; }
@@ -109,6 +109,40 @@ function harness(initialURL = "https://x.com/home") {
     advance(ms) { clock += ms; },
   };
 }
+
+function carousel(count, padded = false) {
+  const list = { getAttribute: name => name === "role" ? "list" : null };
+  list.children = Array.from({ length: count + (padded ? 2 : 0) }, (_, index) => ({
+    parentElement: list,
+    querySelector(selector) {
+      assert.equal(selector, '[aria-label="placeholder"] img[src^="data:image/svg+xml,"]');
+      return padded && (index === 0 || index === list.children.length - 1) ? {} : null;
+    },
+  }));
+  return list.children.map(slide => ({ closest: () => slide }));
+}
+
+for (const count of [1, 2, 4]) for (const padded of [false, true]) {
+  test(`${count}-image ${padded ? "padded" : "unpadded"} carousel maps attachment indices, not navigation sentinels`, () => {
+    const h = harness(destination), media = Array(count).fill({ poster: image });
+    const elements = carousel(count, padded);
+    assert.deepEqual(elements.map(e => h.api.viewerMediaIndex(e, media)),
+      padded ? [-1, ...Array.from({ length: count }, (_, i) => i), -1] : Array.from({ length: count }, (_, i) => i));
+  });
+}
+
+test("unknown carousel shapes and missing metadata cannot borrow the route's image index", () => {
+  const h = harness(destination);
+  assert.equal(h.api.viewerMediaIndex({ closest: () => null }, [{}]), -1);
+  assert.equal(h.api.viewerMediaIndex(carousel(1)[0], []), -1);
+  assert.equal(h.api.viewerMediaIndex(carousel(3)[1], [{}]), -1, "extra non-placeholder slides are not padding");
+  const elements = carousel(1, true);
+  elements[2].closest().querySelector = () => null;
+  assert.equal(h.api.viewerMediaIndex(elements[1], [{}]), -1, "both padding markers are required");
+  const list = elements[0].closest().parentElement;
+  list.getAttribute = () => null;
+  assert.equal(h.api.viewerMediaIndex(elements[1], [{}]), -1, "list semantics are required");
+});
 
 function opened() {
   const h = harness();

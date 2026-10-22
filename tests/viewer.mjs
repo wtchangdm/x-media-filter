@@ -7,12 +7,17 @@ import {MediaCapture} from './media-capture.mjs';
 import policy from '../extension/policy.js';
 const exec = promisify(execFile);
 const [ws, target, session = 'xmf-enlarge', output = '/tmp/xmf-viewer.json', mode = 'normal', scope = 'all'] = process.argv.slice(2);
-if (!ws || !target) throw new Error('Usage: node tests/viewer.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal] [all|home|home-auto|album]');
-assert.ok(['all', 'home', 'home-auto', 'album'].includes(scope), 'supported viewer test scope');
+if (!ws || !target) throw new Error('Usage: node tests/viewer.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal] [all|home|home-auto|album|single]');
+assert.ok(['all', 'home', 'home-auto', 'album', 'single'].includes(scope), 'supported viewer test scope');
 const id = process.env.XMF_EXTENSION_ID || 'pmenhkpmhggnjipkgemamaecpoodacah';
 const post = 'https://x.com/ArtificialAnlys/status/2110893784422908225';
 const album = 'https://x.com/Cloudflare/status/2111522160153882734';
 const albumImages = 4;
+// Keep user-supplied regression routes out of source control and result records.
+const single = process.env.XMF_SINGLE_PHOTO_URL || null;
+if (single && !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(single))
+  throw new Error('XMF_SINGLE_PHOTO_URL must be an X status URL without a photo suffix');
+if (scope === 'single' && !single) throw new Error('Set XMF_SINGLE_PHOTO_URL for the single-photo regression');
 const capture = new MediaCapture(ws, target, mode === 'cold');
 const report = {version: '0.1.0', mode, scope, results: []};
 let popup, original;
@@ -188,7 +193,7 @@ async function run(route, blocked, keyboard = false) {
   const page = requests.filter(r => !r.document?.startsWith('chrome-extension://'));
   await until(() => page.every(r => r.error || r.finished), 'page network outcomes');
   assert.ok(page.length > 0 && page.every(r => r.error === 'net::ERR_BLOCKED_BY_CLIENT'));
-  report.results.push({name: `${new URL(route).pathname === '/home' ? 'home' : 'existing image thread'} ${blocked ? 'manual' : 'automatic'} native enlargement${keyboard ? ' by keyboard' : ''}`, route, settings: {a: blocked, c: true, b: true}, passed: true, viewport: visible, successfulResponses: success.length, authorizedAssets: new Set(success.map(r => policy.assetKey(r.url))).size, pageBlocked: page.length});
+  report.results.push({name: `${new URL(route).pathname === '/home' ? 'home' : 'image post'} ${blocked ? 'manual' : 'automatic'} native enlargement${keyboard ? ' by keyboard' : ''}`, route: route === single ? 'private-single-photo-fixture' : route, settings: {a: blocked, c: true, b: true}, passed: true, viewport: visible, successfulResponses: success.length, authorizedAssets: new Set(success.map(r => policy.assetKey(r.url))).size, pageBlocked: page.length});
   if (keyboard) { await retryFocus(true); await ab('press', 'Escape'); }
   else await ab('click', '[role="dialog"] button[aria-label="Close"]');
   await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(route).pathname)}`), 'native close returns to source');
@@ -197,6 +202,29 @@ async function run(route, blocked, keyboard = false) {
   await ab('forward');
   await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(route).pathname)}`), 'native history remains usable');
   console.log('PASS', report.results.at(-1).name);
+  return new Set(success.map(r => policy.assetKey(r.url)));
+}
+async function singlePhoto() {
+  const expected = await run(single, true);
+  assert.equal(expected.size, 1, 'reported post has one authorized image');
+  await run(single, false, true);
+  await settings(true);
+  for (const reload of [false, true]) {
+    const start = capture.mark();
+    await ab(reload ? 'reload' : 'open', ...(!reload ? [single + '/photo/1'] : []));
+    await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1&&s.dataset.ready==='true'});if(!s)return false;s.id='xmf-viewer-selected';return !!s.shadowRoot.querySelector('button')})()`), 'single-photo visible placeholder');
+    assert.ok(await noFrames(), 'direct single-photo startup is blocked');
+    await until(() => {const r=capture.since(start);return r.length>0&&r.every(r=>r.error||r.finished);}, 'single-photo startup network outcomes');
+    assert.ok(capture.since(start).every(r=>r.error==='net::ERR_BLOCKED_BY_CLIENT'), 'no successful pre-selection media');
+    const blocked = capture.since(start).length;
+    const before = new Set(capture.requests.values());
+    await clickPlaceholder();
+    await until(viewerReady, 'single-photo click decodes selected viewer');
+    const selection = await selectionWindow(before, 1);
+    assert.ok(expected.has(selection.selected), 'direct viewer uses the same asset as the native inline photo');
+    assert.equal(await evaluate(`[...document.querySelectorAll('xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')).length`), 1, 'sidebar and navigation sentinels receive no renderer');
+    report.results.push({name: `single-photo direct ${reload ? 'reload' : 'startup'} selection`, route: 'private-single-photo-fixture/photo/1', settings: {a:true,c:true,b:true}, passed:true, pageBlocked:blocked, selection:selection.evidence});
+  }
 }
 try {
   await ab('tab', target);
@@ -208,11 +236,13 @@ try {
     await run(post, true);
     await run(post, false, true);
   }
-  if (scope !== 'album') {
+  if (scope === 'single' || (scope === 'all' && single)) await singlePhoto();
+  else if (scope === 'all') report.singlePhotoSkipped = 'XMF_SINGLE_PHOTO_URL not supplied';
+  if (scope !== 'album' && scope !== 'single') {
     if (scope !== 'home-auto') await run('https://x.com/home', true);
     await run('https://x.com/home', false);
   }
-  if (!scope.startsWith('home')) {
+  if (!scope.startsWith('home') && scope !== 'single') {
     await settings(true);
     const start = capture.mark();
     await ab('open', album);

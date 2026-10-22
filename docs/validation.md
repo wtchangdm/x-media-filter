@@ -1,8 +1,8 @@
 # Implementation evidence — 0.1.0
 
-Latest validation: **2026-10-18**. Earlier sections retain their historical results.
+Latest validation: **2026-10-22**. Earlier sections retain their historical results.
 
-Runtime: the user's existing **Chrome 155.0.8059.85**, attached through `agent-browser` with a named, pinned session. The reduced page user-agent reports 155.0.0.0. No independent logged-out browser was used for these acceptance results.
+Runtime: the user's existing **Chrome 156.0.8078.48** for the latest focused viewer/video runs, attached through `agent-browser` with a named, pinned session. Earlier runs used **155.0.8059.85**. No independent logged-out browser was used for these acceptance results.
 
 ## Mechanism proved
 
@@ -11,6 +11,22 @@ The packaged static rules remain enabled for every X page media request, includi
 The worker checks the internal sender, current tab URL, exact top-document challenge, route generation, ticket, media destination and video/poster identity (or the explicit media-entry ID for custom `/media/` covers). A response-header DNR guard rejects loader redirects, installed before any ticket can load. This is separate from the static **pre-request** page barrier; a response-header rule is not being misrepresented as prevention of an initial request.
 
 Metadata and bounded renderer-key discovery use a document-start, nonce-bound MessagePort handoff, followed by shape/URL validation. Window-broadcast metadata and replacement handoffs are not accepted. A synthetic page `.click()` is not a user grant. The identity adapter reads only bounded keyed-entry identifiers, never React props/post bodies, to retain one occurrence through X virtualization. Unknown or colliding renderer identity falls back to an independent document-local occurrence, not a URL-based authorization.
+
+## Single-photo carousel padding fix
+
+On **2026-10-22**, reproduced the user-reported unclickable single-photo viewer (URL intentionally omitted) in Chrome **156.0.8078.48**. Its single attachment occupies the middle of three native list items; the first and last are empty SVG navigation placeholders. The old adapter treated DOM index 1 as photo 2 and counted the empty slides as images. A trusted click reached the placeholder but created no renderer and emitted no media request. Direct entry and native post-to-viewer SPA entry both failed.
+
+`content.js` now validates the list size against attachment metadata and excludes recognized padding before mapping the attachment index. Empty navigation slides receive no descriptor or grant. Unknown shapes/missing metadata remain blocked; the route index alone cannot identify an attachment. The selected-slide geometry/index gate, per-occurrence tickets, static DNR barrier and worker validation remain intact.
+
+Existing Chrome **156.0.8078.48**, extension **0.1.0**:
+
+- [Normal](validation/single-photo-normal.json) and [cold](validation/single-photo-cold.json) runs pass manual native enlargement with **A/C/B ON**, automatic/keyboard enlargement with **A OFF, C/B ON**, duplicate isolation, Close/Escape/history and real local decode-error/Retry focus recovery. Both manual SPA cases succeed for exactly one canonical image asset. Retry is a local decoder test, not a simulated CDN outage.
+- Direct `/photo/1` startup and reload both show a clickable placeholder. Before selection, **14/14 normal** and **18/16 cold** page-media attempts are canceled with `net::ERR_BLOCKED_BY_CLIENT`, with no successful media response. Each of the four separate selection windows completes exactly **one** extension-owned image response for the same asset observed inline. Sidebar copies and empty navigation slides receive no renderer. This is network-event and decoded-renderer evidence, not a zero-Resource-Timing-size inference.
+- The existing four-image album passes [normal](validation/single-photo-album-normal.json) and [cold](validation/single-photo-album-cold.json) Next/Previous, settings revocation, direct reload and manual group selection. Separate direct photo/2 and photo/3 windows each complete one image response for the selected asset only.
+- [Normal video regression](validation/single-photo-videos-normal.json) passes custom-cover and encoded-thumbnail posts with **A/C/B ON** before manual selection: zero successful pre-click media, canceled page requests, one authorized HTTP **206** MP4, playback/seek to **40 seconds**, duplicate isolation, reload, A-OFF automatic loading and A-ON revocation. This verifies the existing progressive MP4 path, not adaptive HLS playback. The first video attempt used the harness's obsolete default extension ID and stopped before settings/capture; rerunning with the ID returned by `load.mjs` passes.
+- **142** offline tests pass, including seven new list-index/padding cases; `node tests/check.mjs` passes. The two-/four-image padded layouts have only offline coverage; the live fixtures prove the padded single-photo and unpadded four-photo layouts. Settings and test-target cache/site-worker controls were restored. Normal runs observe one X site-worker target; cold runs bypass it without clearing storage.
+
+Scope limits: no fresh Home/all-surface/eight-setting/full-browser-restart pass. Unknown carousel structures remain fail-closed and may need a new adapter. No runtime dependencies, permissions, loader behavior or manifest version changed. The prior store ZIP was not regenerated.
 
 ## Native photo links and viewer handoff
 
@@ -149,7 +165,7 @@ node --test tests/*.test.cjs
 node tests/check.mjs
 ```
 
-135 current unit/protocol tests cover OFF/OFF/ON defaults, legacy migration, all eight toggle combinations, independent A/C/B revocation, focus/relationship policy, URL normalization and rejection, video/poster and custom-cover media-ID binding (including missing/malformed/wrong IDs and encoded-thumbnail mismatches), single redemption, rejected-replay disconnect isolation, sender/tab/document/epoch boundaries, asynchronous revocation, settings-read races and redirect-guard installation failure, plus native viewer destination/asset/index/occurrence binding, handoff expiry, selected-slide gating, direct-viewer group memory, same-status exit and late-ticket revocation, identity upgrades, readiness-message rejection, focus recovery and settings revocation. Packaging checks also verify the manifest's new icon resources and PNG dimensions. These mocks do not prove Chrome network behavior; the browser runs above do that for the exercised deliveries. The integration harness waits for media request outcomes, distinguishes canonical image assets from URL/format variants, and uses browser request timestamps rather than treating event delivery time as transmission time.
+142 current unit/protocol tests cover OFF/OFF/ON defaults, legacy migration, all eight toggle combinations, independent A/C/B revocation, focus/relationship policy, URL normalization and rejection, video/poster and custom-cover media-ID binding (including missing/malformed/wrong IDs and encoded-thumbnail mismatches), single redemption, rejected-replay disconnect isolation, sender/tab/document/epoch boundaries, asynchronous revocation, settings-read races and redirect-guard installation failure, plus native viewer metadata-count/padding mapping and rejection of unknown carousel shapes, destination/asset/index/occurrence binding, handoff expiry, selected-slide gating, direct-viewer group memory, same-status exit and late-ticket revocation, identity upgrades, readiness-message rejection, focus recovery and settings revocation. Packaging checks also verify the manifest's new icon resources and PNG dimensions. These mocks do not prove Chrome network behavior; the browser runs above do that for the exercised deliveries. The integration harness waits for media request outcomes, distinguishes canonical image assets from URL/format variants, and uses browser request timestamps rather than treating event delivery time as transmission time.
 
 ## Remaining gaps and ceilings
 
