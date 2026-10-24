@@ -12,7 +12,7 @@ const route = 'https://x.com/ArtificialAnlys/status/2110893784422908225';
 const photo = '/ArtificialAnlys/status/2110893791951675416/photo/1';
 const slot = `[role="dialog"] article a[href="${photo}"] xmf-slot`;
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version: '0.1.0', route: route + '/photo/1', mode, settings: {a: true, c: true, b: true}, results: []};
+const report = {version: '0.1.1', route: route + '/photo/1', mode, settings: {a: true, c: true, b: true}, results: []};
 let popup, original;
 async function ab(...args) {
   return (await exec('agent-browser', ['--session', session, '--auto-connect', '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim();

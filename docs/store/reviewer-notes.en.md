@@ -1,6 +1,6 @@
 # Reviewer test instructions — draft for dashboard
 
-X Media Filter 0.1.0 is a desktop Chrome Manifest V3 extension requiring Chrome 128+. There is no extension account, license key, payment, backend or runtime debugging connection. The development CDP harness is not packaged or required for users/reviewers.
+X Media Filter 0.1.1 is a desktop Chrome Manifest V3 extension requiring Chrome 128+. There is no extension account, license key, payment, backend or runtime debugging connection. The development CDP harness is not packaged or required for users/reviewers.
 
 ## Setup and access
 

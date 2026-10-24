@@ -19,7 +19,7 @@ if (single && !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(single))
   throw new Error('XMF_SINGLE_PHOTO_URL must be an X status URL without a photo suffix');
 if (scope === 'single' && !single) throw new Error('Set XMF_SINGLE_PHOTO_URL for the single-photo regression');
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version: '0.1.0', mode, scope, results: []};
+const report = {version: '0.1.1', mode, scope, results: []};
 let popup, original;
 async function ab(...args) {
   return (await exec('agent-browser', ['--session', session, '--cdp', ws, '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim();

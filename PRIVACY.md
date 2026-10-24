@@ -4,7 +4,7 @@
 - Effective date: **2026-10-17**
 - Project: [X Media Filter](https://github.com/wtchangdm/x-media-filter)
 - Support: [Support and troubleshooting](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md)
-- Applies to extension version **0.1.0**.
+- Applies to extension versions **0.1.0–0.1.1**.
 
 ## Purpose
 

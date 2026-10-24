@@ -10,7 +10,7 @@ const [ws, target, session = 'xmf-scope', output = '/tmp/xmf-scope.json', mode =
 if (!ws || !target) throw new Error('Usage: node tests/scope.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal]');
 const extensionId = process.env.XMF_EXTENSION_ID || 'pmkikmmocmppigkinihgchopoonpoldi';
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version: '0.1.0', mode, routes: ['https://x.com/<test-profile>', 'https://x.com/<test-profile>/photo', 'https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1'], results: []};
+const report = {version: '0.1.1', mode, routes: ['https://x.com/<test-profile>', 'https://x.com/<test-profile>/photo', 'https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1'], results: []};
 const profileRequests = new Map();
 let popup, original;
 // Retain only request outcomes for excluded profile images, never headers or bodies.

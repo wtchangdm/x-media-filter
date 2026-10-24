@@ -8,7 +8,13 @@ Free to use. Requires desktop **Chrome 128 or later**.
 
 ## Install
 
-The Chrome Web Store release is not available yet. To install the current version:
+[![Available in the Chrome Web Store](https://developer.chrome.com/static/docs/webstore/branding/image/UV4C4ybeBTsZt43U4xis.png)](https://chromewebstore.google.com/detail/x-media-filter/foikoegjbgcejpbjgnbggcjoaminebem)
+
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/x-media-filter/foikoegjbgcejpbjgnbggcjoaminebem), then pin X Media Filter to the toolbar and refresh your X tabs.
+
+### Manual installation
+
+To install from source instead:
 
 1. [Download the source ZIP](https://github.com/wtchangdm/x-media-filter/archive/refs/heads/main.zip) and extract it.
 2. Open `chrome://extensions` and enable **Developer mode**.

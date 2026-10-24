@@ -1,6 +1,6 @@
-# Public release preparation — 0.1.0
+# Public release preparation — 0.1.1
 
-**Chrome Web Store review candidate, not a submitted or published store extension.** Public GitHub source hosting and the MIT license were explicitly requested; those are separate from store submission, developer-account registration, payments and store publication. Runtime code, manifest version, permissions and saved settings remain unchanged.
+**0.1.1 update package prepared locally; not submitted or published by this work.** Public GitHub source hosting and the MIT license were explicitly requested; those are separate from store submission, developer-account registration, payments and store publication. This version bump changes only the manifest version; executable runtime code, permissions and saved settings are unchanged.
 
 ## Confirmed decisions
 
@@ -19,7 +19,7 @@
 
 | Item | Location |
 | --- | --- |
-| Runtime ZIP | `artifacts/release/x-media-filter-0.1.0.zip` |
+| Runtime ZIP | `artifacts/release/x-media-filter-0.1.1.zip` |
 | Checksums and per-file inventory | `artifacts/release/SHA256SUMS`, `package-report.json` |
 | Reproducible packager | [scripts/package.py](../../scripts/package.py), Python 3 standard library |
 | Listing | [listing.en.md](listing.en.md) |
@@ -136,7 +136,7 @@ The 82 offline protocol/policy tests and historical network evidence remain dist
 
 1. Complete developer-account setup and the remaining final approvals. GitHub source/policy publication is separate from Chrome Web Store publication and was authorized by the repository request.
 2. Verify the final ZIP hash, listing, images, public policy/support links and dashboard warnings.
-3. In **Items → Add new item**, upload `artifacts/release/x-media-filter-0.1.0.zip` and fill Listing, Privacy, Distribution and Test instructions from the prepared docs. Use free/all available regions; confirm Public versus Unlisted before applying visibility. Both have the same review/policy requirements. Add the prepared icon/promo/screenshot, policy URL and SUPPORT.md URL; keep the built-in public support hub off if desired.
+3. In **Items → Add new item**, upload `artifacts/release/x-media-filter-0.1.1.zip` and fill Listing, Privacy, Distribution and Test instructions from the prepared docs. Use free/all available regions; confirm Public versus Unlisted before applying visibility. Both have the same review/policy requirements. Add the prepared icon/promo/screenshot, policy URL and SUPPORT.md URL; keep the built-in public support hub off if desired.
 4. Obtain explicit **Submit for Review** authorization. Use deferred publishing rather than automatic publication.
 5. Obtain explicit publication authorization after approval. A store-assigned extension ID differs from the unpacked ID; runtime code uses `chrome.runtime.id/getURL`, not the development ID. Preferences do not automatically migrate between the two installations.
 

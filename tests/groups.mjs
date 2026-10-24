@@ -11,7 +11,7 @@ if (!ws || !target) throw new Error('Usage: node tests/groups.mjs <existing-brow
 const id = process.env.XMF_EXTENSION_ID || 'pmkikmmocmppigkinihgchopoonpoldi';
 const route = 'https://x.com/OpenAIDevs/status/2110855382444704190';
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version:'0.1.0', mode, route, results:[]};
+const report = {version:'0.1.1', mode, route, results:[]};
 let popup, original, second;
 async function ab(...args) { return (await exec('agent-browser', ['--session',session,'--auto-connect','--pin-tab',...args], {timeout:40000,maxBuffer:1024*1024})).stdout.trim(); }
 async function evaluate(code) { return JSON.parse(await ab('eval','-b',Buffer.from(code).toString('base64'))); }

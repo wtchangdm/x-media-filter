@@ -10,7 +10,7 @@ const [ws,target,session='xmf-video-fix',output='/tmp/xmf-videos.json',mode='nor
 if(!ws||!target)throw new Error('Usage: node tests/videos.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal]');
 const extensionId=process.env.XMF_EXTENSION_ID||'pmkikmmocmppigkinihgchopoonpoldi';
 const capture=new MediaCapture(ws,target,mode==='cold');
-const report={version:'0.1.0',mode,results:[]};
+const report={version:'0.1.1',mode,results:[]};
 let popup,original;
 async function ab(...args){return (await exec('agent-browser',['--session',session,'--auto-connect','--pin-tab',...args],{encoding:'utf8',timeout:40000,maxBuffer:1024*1024})).stdout.trim();}
 async function evaluate(code){return JSON.parse(await ab('eval','-b',Buffer.from(code).toString('base64')));}

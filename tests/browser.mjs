@@ -13,7 +13,7 @@ const image = 'https://x.com/ArtificialAnlys/status/2110893784422908225';
 const video = 'https://x.com/thsottiaux/status/2111249534072529256';
 const customCoverVideo = 'https://x.com/github/status/2111225205309780009';
 const quote = 'https://x.com/thsottiaux/status/2111245052513259606';
-const report = {version: '0.1.0', mode, results: [], gaps: ['Browser restart', 'Additional surfaces and media families', 'Adaptive HLS/quality switching: uses native progressive MP4 instead']};
+const report = {version: '0.1.1', mode, results: [], gaps: ['Browser restart', 'Additional surfaces and media families', 'Adaptive HLS/quality switching: uses native progressive MP4 instead']};
 const capture = new MediaCapture(ws, target, mode === 'cold');
 let popup, original, secondary;
 async function ab(...args) {

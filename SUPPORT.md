@@ -1,12 +1,12 @@
 # X Media Filter Support
 
-Installation help, troubleshooting and known limitations for X Media Filter **0.1.0**.
+Installation help, troubleshooting and known limitations for X Media Filter **0.1.1**.
 
 ## Install and start
 
 Requires desktop **Chrome 128 or later**. There is no extension account, subscription or payment.
 
-The Chrome Web Store release has not been published yet. For the current unpacked version:
+For manual installation of the current unpacked version:
 
 1. Download the repository and extract it locally.
 2. Open `chrome://extensions` and enable **Developer mode**.
