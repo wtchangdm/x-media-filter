@@ -1,6 +1,6 @@
 # Reviewer test instructions — draft for dashboard
 
-X Media Filter 0.1.1 is a desktop Chrome Manifest V3 extension requiring Chrome 128+. There is no extension account, license key, payment, backend or runtime debugging connection. The development CDP harness is not packaged or required for users/reviewers.
+X Media Filter 0.1.2 is a desktop Chrome Manifest V3 extension requiring Chrome 128+. There is no extension account, license key, payment, backend or runtime debugging connection. The development CDP harness is not packaged or required for users/reviewers.
 
 ## Setup and access
 
@@ -32,11 +32,11 @@ Public fixture availability depends on X and may change:
 - `rules.json` keeps page-origin X media requests blocked for recognized paths, regardless of settings. No tab/CDN-wide allow rule is used for clicks.
 - `worker.js` checks internal sender, tab, exact document context, route epoch, single-use ticket and permitted media destination. A redirect-guard installation failure denies loading.
 - `player.html` renders only the validated image or progressive MP4 with anonymous CORS. It does not act as an arbitrary URL fetch proxy or forward X cookies/authentication headers.
-- `bridge.js` observes relevant X responses already delivered to the page and sends selected metadata through a nonce-bound MessagePort. No remotely supplied code is executed. All executable resources are packaged.
+- `bridge.js` observes relevant X responses already delivered to the page and sends selected metadata through a nonce-bound MessagePort. A bounded synchronous lookup also reads a numeric attachment ID from current host props for image-viewer matching; that page-provided ID does not grant loading authority. No remotely supplied code is executed. All executable resources are packaged.
 - Only three boolean settings are persisted. No analytics, browsing record uploads, remote code, debugger/cookies/history permissions or external services are added by the extension.
 
 ## Known limitations — not a universal compatibility claim
 
 Fixed-rendition progressive MP4 only. HLS-only/live/paid/third-party video may remain unavailable. Recognized pbs.twimg.com post-image/poster paths and video.twimg.com delivery are covered; new hosts or changed X layouts need revalidation. Mixed attachments, animated GIFs, quoted videos, Lists/Communities and full-browser-restart behavior do not have complete current native validation. DMs, Spaces and external embeds are outside the verified scope. Earlier broad surface reports were not all rerun after recent fixes.
 
-Existing evidence uses Chrome 155.0.8059.85, not an actual Chrome 128 run. Release packaging did not change runtime code. See the project's validation documentation for test provenance; do not submit private CDP URLs, raw API bodies, account screenshots or authenticated HARs as reviewer evidence.
+Latest focused viewer/video evidence uses Chrome 156.0.8078.80, not an actual Chrome 128 run. Version 0.1.2 packages the viewer/input fixes tested under version 0.1.1; the final manifest-version bump did not change executable runtime code. See the project's validation documentation for test provenance; do not submit private CDP URLs, raw API bodies, account screenshots or authenticated HARs as reviewer evidence.

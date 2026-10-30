@@ -1,6 +1,6 @@
 # Privacy practices — submission draft
 
-Based on **0.1.1 source code**. These are draft disclosures for publisher review, not a record of dashboard certifications. Local-only processing still requires disclosure; no developer backend does not mean no user data is handled.
+Based on **0.1.2 source code**. These are draft disclosures for publisher review, not a record of dashboard certifications. Local-only processing still requires disclosure; no developer backend does not mean no user data is handled.
 
 ## Single purpose — paste copy
 

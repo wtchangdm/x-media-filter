@@ -7,22 +7,37 @@ import {MediaCapture} from './media-capture.mjs';
 import policy from '../extension/policy.js';
 const exec = promisify(execFile);
 const [ws, target, session = 'xmf-enlarge', output = '/tmp/xmf-viewer.json', mode = 'normal', scope = 'all'] = process.argv.slice(2);
-if (!ws || !target) throw new Error('Usage: node tests/viewer.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal] [all|home|home-auto|album|single]');
-assert.ok(['all', 'home', 'home-auto', 'album', 'single'].includes(scope), 'supported viewer test scope');
+if (!ws || !target) throw new Error('Usage: node tests/viewer.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal] [all|home|home-auto|album|single|custom]');
+assert.ok(['all', 'home', 'home-auto', 'album', 'single', 'custom'].includes(scope), 'supported viewer test scope');
 const id = process.env.XMF_EXTENSION_ID || 'pmenhkpmhggnjipkgemamaecpoodacah';
 const post = 'https://x.com/ArtificialAnlys/status/2110893784422908225';
-const album = 'https://x.com/Cloudflare/status/2111522160153882734';
-const albumImages = 4;
+const suppliedAlbum = process.env.XMF_ALBUM_URL || null;
+const suppliedAlbumImages = process.env.XMF_ALBUM_IMAGES;
+if (suppliedAlbum && !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(suppliedAlbum))
+  throw new Error('XMF_ALBUM_URL must be an X status URL without a photo suffix');
+if ((suppliedAlbum || suppliedAlbumImages !== undefined || scope === 'custom') && (!suppliedAlbum || !suppliedAlbumImages))
+  throw new Error('Set both XMF_ALBUM_URL and XMF_ALBUM_IMAGES for a custom album fixture');
+const album = suppliedAlbum || 'https://x.com/Cloudflare/status/2111522160153882734';
+const albumImages = suppliedAlbumImages === undefined ? 4 : Number(suppliedAlbumImages);
+assert.ok(Number.isInteger(albumImages) && albumImages >= 3 && albumImages <= 16, 'XMF_ALBUM_IMAGES must be an integer from 3 through 16');
+const albumRoute = suppliedAlbum ? 'private-album-fixture' : album;
 // Keep user-supplied regression routes out of source control and result records.
 const single = process.env.XMF_SINGLE_PHOTO_URL || null;
 if (single && !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(single))
   throw new Error('XMF_SINGLE_PHOTO_URL must be an X status URL without a photo suffix');
 if (scope === 'single' && !single) throw new Error('Set XMF_SINGLE_PHOTO_URL for the single-photo regression');
+const redact = value => [[single, 'private-single-photo-fixture'], [suppliedAlbum, 'private-album-fixture']]
+  .reduce((text, [url, label]) => url ? text.replaceAll(url, label).replaceAll(new URL(url).pathname, label) : text, String(value));
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version: '0.1.1', mode, scope, results: []};
+const report = {version: '0.1.2', mode, scope, results: []};
 let popup, original;
 async function ab(...args) {
-  return (await exec('agent-browser', ['--session', session, '--cdp', ws, '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim();
+  try {
+    return (await exec('agent-browser', ['--session', session, '--cdp', ws, '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim();
+  } catch (error) {
+    // execFile's message includes the CDP URL and base64 scripts containing private fixture URLs.
+    throw new Error(redact(`agent-browser ${args[0]} failed: ${error.killed ? 'command timeout' : error.stderr?.trim() || error.code || 'unknown error'}`));
+  }
 }
 async function evaluate(code) { return JSON.parse(await ab('eval', '-b', Buffer.from(code).toString('base64'))); }
 async function until(fn, name) {
@@ -36,12 +51,13 @@ async function until(fn, name) {
       const visible=viewer.filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&r.bottom>0&&r.top<innerHeight});
       const statusId=location.pathname.match(/\\/status\\/(\\d+)/)?.[1];
       return {routeType:location.protocol==='chrome-extension:'?'extension':location.pathname==='/home'?'home':/\\/status\\/\\d+\\/photo\\/\\d+/.test(location.pathname)?'photo':statusId?'status':'other',
-        fixtureStatusId:${JSON.stringify([new URL(post).pathname.split('/')[3], new URL(album).pathname.split('/')[3]])}.includes(statusId)?statusId:null,
+        fixtureStatusId:${JSON.stringify([post, ...(!suppliedAlbum ? [album] : [])].map(url => new URL(url).pathname.split('/')[3]))}.includes(statusId)?statusId:null,
         connectedSlots:slots.length,readySlots:slots.filter(s=>s.dataset.ready==='true').length,
         pendingControls:slots.filter(s=>!s.shadowRoot?.querySelector('iframe')&&s.shadowRoot?.querySelector('button')?.disabled).length,
         viewerSlots:viewer.length,visibleViewerSlots:visible.length,
         decodedVisibleViewerSlots:visible.filter(s=>s.shadowRoot?.querySelector('iframe')?.style.pointerEvents==='none').length,
-        nativeClick:window.__xmfViewerClick||null};
+        nativeClick:window.__xmfViewerClick||null,pointer:window.__xmfPointer||null,
+        selected:(()=>{const s=document.querySelector('#xmf-viewer-selected');return s?{button:s.shadowRoot.querySelector('button')?.textContent,frame:!!s.shadowRoot.querySelector('iframe')}:null})()};
     })()`);
   } catch { diagnostics = {unavailable: true}; }
   throw new Error('Timed out: ' + name + '; ' + JSON.stringify(diagnostics));
@@ -55,7 +71,27 @@ async function settings(a) {
   await until(() => evaluate(`['a','c','b'].every(k=>!document.getElementById(k).disabled)`), 'settings saved');
   await ab('tab', target);
 }
-const viewerReady = () => evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1&&s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none'});return s.length===1})()`);
+// Check the native attachment's photo URL, not merely a decoded frame left from the previous slide.
+const matchesViewerRoute = String(function (slot) {
+  for (let node = slot.parentElement, depth = 0; node && depth < 20; node = node.parentElement, depth++) {
+    const key = Object.keys(node).find(key => key.startsWith('__reactProps$'));
+    const media = key && node[key]?.children?.props?.mediaDetail;
+    if (media) return typeof media.expanded_url === 'string' &&
+      new URL(media.expanded_url, location.origin).pathname.match(/\/status\/\d+\/photo\/\d+$/)?.[0] ===
+      location.pathname.match(/\/status\/\d+\/photo\/\d+$/)?.[0];
+  }
+  return false;
+});
+let viewerReadiness;
+async function viewerReady() {
+  const state = await evaluate(`(()=>{const slots=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none'&&(${matchesViewerRoute})(s)});if(slots.length!==1)return null;const s=slots[0],r=s.getBoundingClientRect();return JSON.stringify([performance.timeOrigin,location.pathname,s.parentElement.getAttribute('data-xmf-media-id'),r.x.toFixed(1),r.y.toFixed(1),r.width.toFixed(1),r.height.toFixed(1)])})()`);
+  if (!state || viewerReadiness?.state !== state) {
+    viewerReadiness = state ? {state, since: Date.now()} : null;
+    return false;
+  }
+  // A route update can precede X's carousel animation; a decoded old slide is not readiness.
+  return Date.now() - viewerReadiness.since >= 200;
+}
 const noFrames = () => evaluate(`[...document.querySelectorAll('xmf-slot')].every(s=>!s.shadowRoot.querySelector('iframe'))`);
 // Use the visible iframe's CDP frame identity, never a page-provided media URL.
 const visibleViewerFrame = `(()=>{
@@ -134,11 +170,22 @@ async function choose(route) {
   const path = new URL(route).pathname;
   return until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-slot')].find(s=>{const a=s.closest('a');return a&&a.pathname.includes('/photo/')&&${path === '/home' ? 'true' : `(a.pathname===${JSON.stringify(path + '/photo/1')}||[...(s.closest('article')?.querySelectorAll('time')||[])].some(t=>t.closest('a')?.pathname===${JSON.stringify(path)}))`}&&s.dataset.ready==='true'&&(s.shadowRoot.querySelector('iframe')?.title==='Selected post image'||s.shadowRoot.querySelector('button')?.textContent.includes('image')||s.shadowRoot.querySelector('button')?.textContent.includes('Image'))});if(!s)return false;s.id='xmf-viewer-selected';s.scrollIntoView({block:'center',behavior:'instant'});return s.closest('a').pathname})()`), 'native image attachment');
 }
-async function clickPlaceholder() {
-  const snapshot = await ab('snapshot', '-i', '-s', '#xmf-viewer-selected');
-  const ref = snapshot.match(/button .*\[ref=(e\d+)\]/)?.[1];
-  assert.ok(ref, 'visible accessible image placeholder');
-  await ab('click', '@' + ref);
+async function pointerSelect(viewer = false, placeholder = false) {
+  await capture.cdp.call('Page.bringToFront', {}, capture.root);
+  await until(async () => {
+    const point = await evaluate(`(()=>{let s=document.querySelector('#xmf-viewer-selected');if(${viewer}){const visible=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&(${matchesViewerRoute})(s)});if(visible.length!==1)return false;if(s!==visible[0])s?.removeAttribute('id');s=visible[0];s.id='xmf-viewer-selected'}if(!s||${placeholder}&&!s.shadowRoot.querySelector('button'))return false;const r=s.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2),hit=document.elementFromPoint(x,y);if(!(x>=0&&x<innerWidth&&y>=0&&y<innerHeight&&hit&&(hit===s||s.contains(hit)||!!s.closest('a')&&hit.closest('a')===s.closest('a'))))return false;const previous=window.__xmfPointerCandidate;if(previous?.element!==s||previous.x!==x||previous.y!==y||previous.path!==location.pathname){window.__xmfPointerCandidate={element:s,x,y,path:location.pathname,since:performance.now()};return false}return performance.now()-previous.since>=200?{x,y}:false})()`);
+    if (!point) return false;
+    // Hover and recheck before pressing; never auto-scroll or click a stale carousel position.
+    await ab('mouse', 'move', String(point.x), String(point.y));
+    return evaluate(`(()=>{const s=document.querySelector('#xmf-viewer-selected'),hit=document.elementFromPoint(${point.x},${point.y});if(!s||!hit||window.__xmfPointerCandidate?.element!==s)return false;const r=s.getBoundingClientRect();return Math.abs(r.left+r.width/2-${point.x})<1&&Math.abs(r.top+r.height/2-${point.y})<1&&(hit===s||s.contains(hit)||!!s.closest('a')&&hit.closest('a')===s.closest('a'))})()`);
+  }, 'native media receives pointer input after hover');
+  await evaluate(`(()=>{const s=document.querySelector('#xmf-viewer-selected');window.__xmfPointer={placeholder:${placeholder},events:[]};for(const type of ['pointerdown','pointerup','click'])window.addEventListener(type,e=>{window.__xmfPointer.events.push({type,trusted:e.isTrusted,connected:s?.isConnected,current:document.querySelector('#xmf-viewer-selected')===s,selected:e.composedPath().includes(s),button:e.composedPath().includes(s?.shadowRoot.querySelector('button')),target:e.target.tagName,targetTestId:e.target.getAttribute('data-testid'),hit:document.elementFromPoint(e.clientX,e.clientY)?.tagName,targetBox:(()=>{const r=e.target.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})(),x:e.clientX,y:e.clientY,box:s?{x:s.getBoundingClientRect().x,y:s.getBoundingClientRect().y,w:s.getBoundingClientRect().width,h:s.getBoundingClientRect().height}:null});},{once:true,capture:true});return true})()`);
+  await ab('batch', 'mouse down', 'mouse up');
+  const input = await evaluate('window.__xmfPointer');
+  assert.ok(input.events.some(event => event.type === 'click' && event.trusted && event.connected && event.current && event.selected && (!placeholder || event.button)), 'trusted click reaches selected media: ' + JSON.stringify(input));
+}
+async function clickPlaceholder(viewer = false) {
+  await pointerSelect(viewer, true);
 }
 async function run(route, blocked, keyboard = false) {
   await settings(blocked);
@@ -174,9 +221,8 @@ async function run(route, blocked, keyboard = false) {
     await ab('press', 'Enter');
   } else {
     const start = Date.now();
-    await until(() => evaluate(`(()=>{const s=document.querySelector('#xmf-viewer-selected');if(!s)return false;const r=s.getBoundingClientRect(),a=s.closest('a'),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!a&&!!hit&&(hit===s||s.contains(hit)||hit.closest('a')===a)})()`), 'native photo receives pointer input');
+    await pointerSelect();
     report.lastPointerReadinessWaitMs = Date.now() - start;
-    await ab('click', '#xmf-viewer-selected');
   }
   await until(() => evaluate(`location.pathname===${JSON.stringify(destination)}`), 'native viewer URL');
   await until(viewerReady, 'selected image decoded in native viewer without second load click');
@@ -193,7 +239,7 @@ async function run(route, blocked, keyboard = false) {
   const page = requests.filter(r => !r.document?.startsWith('chrome-extension://'));
   await until(() => page.every(r => r.error || r.finished), 'page network outcomes');
   assert.ok(page.length > 0 && page.every(r => r.error === 'net::ERR_BLOCKED_BY_CLIENT'));
-  report.results.push({name: `${new URL(route).pathname === '/home' ? 'home' : 'image post'} ${blocked ? 'manual' : 'automatic'} native enlargement${keyboard ? ' by keyboard' : ''}`, route: route === single ? 'private-single-photo-fixture' : route, settings: {a: blocked, c: true, b: true}, passed: true, viewport: visible, successfulResponses: success.length, authorizedAssets: new Set(success.map(r => policy.assetKey(r.url))).size, pageBlocked: page.length});
+  report.results.push({name: `${new URL(route).pathname === '/home' ? 'home' : 'image post'} ${blocked ? 'manual' : 'automatic'} native enlargement${keyboard ? ' by keyboard' : ''}`, route: route === single ? 'private-single-photo-fixture' : route === album ? albumRoute : route, settings: {a: blocked, c: true, b: true}, passed: true, viewport: visible, successfulResponses: success.length, authorizedAssets: new Set(success.map(r => policy.assetKey(r.url))).size, pageBlocked: page.length});
   if (keyboard) { await retryFocus(true); await ab('press', 'Escape'); }
   else await ab('click', '[role="dialog"] button[aria-label="Close"]');
   await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(route).pathname)}`), 'native close returns to source');
@@ -203,6 +249,34 @@ async function run(route, blocked, keyboard = false) {
   await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(route).pathname)}`), 'native history remains usable');
   console.log('PASS', report.results.at(-1).name);
   return new Set(success.map(r => policy.assetKey(r.url)));
+}
+async function directAlbum(reload) {
+  const firstPhoto = reload ? 2 : 1;
+  const start = capture.mark();
+  await ab(reload ? 'reload' : 'open', ...(!reload ? [album + '/photo/1'] : []));
+  await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(album).pathname + '/photo/' + firstPhoto)}`), 'direct viewer photo ' + firstPhoto);
+  await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1&&s.dataset.ready==='true'});if(!s)return false;s.id='xmf-viewer-selected';return !!s.shadowRoot.querySelector('button')})()`), 'direct album visible placeholder');
+  assert.ok(await noFrames(), 'all-ON direct album startup stays blocked');
+  await until(() => {
+    const images = capture.since(start).filter(imageRequest);
+    return images.length > 0 && images.every(r => r.finished || r.error);
+  }, 'direct viewer startup image outcomes');
+  assert.ok(capture.since(start).every(r => r.status === null), 'no pre-selection successful media');
+  assert.ok(capture.since(start).filter(imageRequest).every(r => r.error === 'net::ERR_BLOCKED_BY_CLIENT'), 'direct album page images are blocked');
+  const pageBlocked = capture.since(start).filter(imageRequest).length;
+  const selections = [];
+  for (let photo = firstPhoto; photo <= (reload ? 3 : albumImages); photo++) {
+    // Each window includes navigation and any lazily mounted sibling requests.
+    const before = new Set(capture.requests.values());
+    if (photo === firstPhoto) await clickPlaceholder(true);
+    else await ab('press', 'ArrowRight');
+    await until(() => evaluate(`location.pathname.endsWith('/photo/${photo}')`), 'direct viewer selected photo ' + photo);
+    await until(viewerReady, 'direct viewer group remains authorized');
+    const selection = await selectionWindow(before, photo);
+    assert.ok(selections.every(previous => previous.selected !== selection.selected), 'Next selects a different image asset');
+    selections.push(selection);
+  }
+  return {pageBlocked, selections: selections.map(selection => selection.evidence)};
 }
 async function singlePhoto() {
   const expected = await run(single, true);
@@ -218,7 +292,7 @@ async function singlePhoto() {
     assert.ok(capture.since(start).every(r=>r.error==='net::ERR_BLOCKED_BY_CLIENT'), 'no successful pre-selection media');
     const blocked = capture.since(start).length;
     const before = new Set(capture.requests.values());
-    await clickPlaceholder();
+    await clickPlaceholder(true);
     await until(viewerReady, 'single-photo click decodes selected viewer');
     const selection = await selectionWindow(before, 1);
     assert.ok(expected.has(selection.selected), 'direct viewer uses the same asset as the native inline photo');
@@ -227,6 +301,7 @@ async function singlePhoto() {
   }
 }
 try {
+  await capture.cdp.ready;
   await ab('tab', target);
   popup = JSON.parse(await ab('tab', 'new', `chrome-extension://${id}/popup.html`, '--json')).data.targetId;
   original = await evaluate('chrome.storage.local.get("filters").then(r=>XMFPolicy.normalizeSettings(r.filters))');
@@ -238,12 +313,20 @@ try {
   }
   if (scope === 'single' || (scope === 'all' && single)) await singlePhoto();
   else if (scope === 'all') report.singlePhotoSkipped = 'XMF_SINGLE_PHOTO_URL not supplied';
-  if (scope !== 'album' && scope !== 'single') {
+  if (scope === 'custom') {
+    await run(album, true);
+    await run(album, false, true);
+  }
+  if (scope !== 'album' && scope !== 'single' && scope !== 'custom') {
     if (scope !== 'home-auto') await run('https://x.com/home', true);
     await run('https://x.com/home', false);
   }
   if (!scope.startsWith('home') && scope !== 'single') {
     await settings(true);
+    if (suppliedAlbum) {
+      const startup = await directAlbum(false);
+      report.results.push({name: `direct ${albumImages}-image startup and lazy sibling selection`, route: albumRoute + '/photo/1', settings: {a: true, c: true, b: true}, passed: true, pageBlocked: startup.pageBlocked, directSelections: startup.selections});
+    }
     const start = capture.mark();
     await ab('open', album);
     await choose(album);
@@ -252,7 +335,7 @@ try {
     await until(() => evaluate(`[...document.querySelectorAll('xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none').length===${albumImages}`), 'all decoded album images');
     const allowed = new Set(capture.since(start).filter(r => r.status >= 200 && r.status < 300).map(r => policy.assetKey(r.url)));
     assert.equal(allowed.size, albumImages);
-    await ab('click', '#xmf-viewer-selected');
+    await pointerSelect();
     await until(viewerReady, 'album native viewer');
     for (let index = 2; index <= albumImages; index++) {
       await ab('press', 'ArrowRight');
@@ -267,41 +350,20 @@ try {
     assert.ok(capture.since(start).filter(r => r.status >= 200 && r.status < 300).every(r => allowed.has(policy.assetKey(r.url)) && r.document?.startsWith('chrome-extension://')));
     await settings(false); await settings(true);
     await until(noFrames, 'viewer grant revoked by filter ON');
-    const reload = capture.mark();
-    await ab('reload');
-    await until(() => evaluate(`!!document.querySelector('[data-testid="swipe-to-dismiss"] xmf-slot')`), 'direct viewer startup');
-    await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(album).pathname + '/photo/2')}`), 'direct reload stays on photo 2');
-    assert.ok(await noFrames());
-    await until(() => {
-      const images = capture.since(reload).filter(imageRequest);
-      return images.length > 0 && images.every(r => r.finished || r.error);
-    }, 'direct viewer startup image outcomes');
-    assert.ok(capture.since(reload).every(r => r.status === null));
-    await evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1});s.id='xmf-viewer-selected';return true})()`);
-    const beforePhoto2 = new Set(capture.requests.values());
-    await clickPlaceholder();
-    await until(viewerReady, 'direct viewer manual selection');
-    const photo2 = await selectionWindow(beforePhoto2, 2);
-    // Previously completed, authorized renderers may remain mounted; new payloads may not broaden the selection.
-    const beforePhoto3 = new Set(capture.requests.values());
-    await ab('press', 'ArrowRight');
-    await until(() => evaluate(`location.pathname.endsWith('/photo/3')`), 'direct viewer next image');
-    await until(viewerReady, 'direct viewer group remains authorized');
-    const photo3 = await selectionWindow(beforePhoto3, 3);
-    assert.ok(photo2.selected !== photo3.selected, 'Next selects a different image asset');
-    report.results.push({name: `native ${albumImages}-image next/previous, revocation, direct viewer reload and manual group selection`, route: album, settings: {a: true, c: true, b: true}, passed: true, authorizedAssets: allowed.size, directSelections: [photo2.evidence, photo3.evidence]});
+    const reload = await directAlbum(true);
+    report.results.push({name: `native ${albumImages}-image next/previous, revocation, direct viewer reload and manual group selection`, route: albumRoute, settings: {a: true, c: true, b: true}, passed: true, authorizedAssets: allowed.size, directSelections: reload.selections});
   }
   assert.equal(capture.failures.length, 0, capture.failures.join('\n'));
   report.passed = true;
 } catch (error) {
-  report.passed = false; report.error = String(error); process.exitCode = 1; console.error(String(error));
+  report.passed = false; report.error = redact(error); process.exitCode = 1; console.error(redact(error));
 } finally {
   if (original && popup) try {
     await ab('tab', popup);
     for (const [key, value] of Object.entries(original)) await ab(value ? 'check' : 'uncheck', '#' + key);
     await until(() => evaluate(`['a','c','b'].every(k=>!document.getElementById(k).disabled)`), 'original settings restored');
-  } catch (error) { report.restoreError = String(error); process.exitCode = 1; }
+  } catch (error) { report.restoreError = redact(error); process.exitCode = 1; }
   await capture.stop();
   if (popup) try { await ab('tab', 'close', popup); await ab('tab', target); } catch {}
-  await writeFile(output, JSON.stringify(report, null, 2) + '\n');
+  await writeFile(output, redact(JSON.stringify(report, null, 2)) + '\n');
 }

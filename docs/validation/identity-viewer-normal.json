@@ -1,0 +1,118 @@
+{
+  "version": "0.1.1",
+  "mode": "normal",
+  "scope": "custom",
+  "results": [
+    {
+      "name": "image post manual native enlargement",
+      "route": "private-album-fixture",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 702.0052490234375,
+        "visible": true,
+        "width": 1330.0001220703125
+      },
+      "successfulResponses": 4,
+      "authorizedAssets": 3,
+      "pageBlocked": 14
+    },
+    {
+      "name": "real decode-error Retry returns keyboard focus to native photo link",
+      "passed": true
+    },
+    {
+      "name": "image post automatic native enlargement by keyboard",
+      "route": "private-album-fixture",
+      "settings": {
+        "a": false,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "viewport": {
+        "close": true,
+        "height": 702.0052490234375,
+        "visible": true,
+        "width": 1330.0001220703125
+      },
+      "successfulResponses": 8,
+      "authorizedAssets": 3,
+      "pageBlocked": 16
+    },
+    {
+      "name": "real decode-error Retry returns keyboard focus to native viewer Close",
+      "passed": true
+    },
+    {
+      "name": "direct 3-image startup and lazy sibling selection",
+      "route": "private-album-fixture/photo/1",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "pageBlocked": 2,
+      "directSelections": [
+        {
+          "photo": 1,
+          "successfulResponses": 2,
+          "authorizedAssets": 1,
+          "completedImageRequests": 2,
+          "pageBlocked": 12
+        },
+        {
+          "photo": 2,
+          "successfulResponses": 1,
+          "authorizedAssets": 1,
+          "completedImageRequests": 1,
+          "pageBlocked": 2
+        },
+        {
+          "photo": 3,
+          "successfulResponses": 1,
+          "authorizedAssets": 1,
+          "completedImageRequests": 1,
+          "pageBlocked": 0
+        }
+      ]
+    },
+    {
+      "name": "native 3-image next/previous, revocation, direct viewer reload and manual group selection",
+      "route": "private-album-fixture",
+      "settings": {
+        "a": true,
+        "c": true,
+        "b": true
+      },
+      "passed": true,
+      "authorizedAssets": 3,
+      "directSelections": [
+        {
+          "photo": 2,
+          "successfulResponses": 2,
+          "authorizedAssets": 1,
+          "completedImageRequests": 2,
+          "pageBlocked": 13
+        },
+        {
+          "photo": 3,
+          "successfulResponses": 1,
+          "authorizedAssets": 1,
+          "completedImageRequests": 1,
+          "pageBlocked": 0
+        }
+      ]
+    }
+  ],
+  "browser": "Chrome/156.0.8078.80",
+  "observedSiteWorkerTargets": 1,
+  "lastPointerReadinessWaitMs": 597,
+  "passed": true
+}

@@ -16,6 +16,7 @@
   let focusAuthor = null;
   let contextReady = !P.statusId(location.href);
   let port;
+  let metadataPort;
   let scheduled = false;
   let articleSequence = 0;
   let viewerHandoff = null;
@@ -169,6 +170,15 @@
     // Refresh descriptors before grouping so recycled nodes cannot inherit a click.
     context(); dirty.add(document); flush();
     if (items.get(item.element) !== item) return;
+    if (item.kind === "image" && item.element.matches('[data-testid="swipe-to-dismiss"]') &&
+        selectedViewer(item.element, item.mediaIndex)) {
+      // Remember the whole attachment group, including siblings X has not mounted yet.
+      const assets = new Set();
+      for (const [mediaIndex, media] of (posts.get(item.attachmentPost)?.media || []).entries()) {
+        if (media.type === "photo") assets.add(imageKey({mediaIndex, poster: media.poster}));
+      }
+      viewerGrant = {route, assets, category: category(item), dialog: item.element.closest('[role="dialog"]')};
+    }
     for (const candidate of items.values()) {
       if (candidate === item || (item.kind === "image" && candidate.kind === "image" &&
           candidate.boundaryNonce === item.boundaryNonce && candidate.attachmentPost === item.attachmentPost)) {
@@ -248,17 +258,23 @@
       relationship: relationship(item.postId)});
   }
   function viewerMediaIndex(element, media) {
-    const slide = element.closest('li[role="listitem"]');
-    const list = slide?.parentElement;
-    if (list?.getAttribute("role") !== "list" || !media.length) return -1;
-    const slides = [...list.children];
-    let index = slides.indexOf(slide);
-    // X can pad its carousel with empty navigation slides (including single photos).
-    // They are not attachments and must never receive metadata or loader grants.
-    if (slides.length === media.length + 2 && [slides[0], slides.at(-1)].every(node =>
-      node.querySelector('[aria-label="placeholder"] img[src^="data:image/svg+xml,"]'))) index--;
-    else if (slides.length !== media.length) return -1;
-    return index >= 0 && index < media.length ? index : -1;
+    if (!media.length) return -1;
+    const poster = P.mediaURL(element.querySelector("img")?.getAttribute("src"), "image");
+    let mediaId = null;
+    if (!poster) {
+      element.removeAttribute("data-xmf-media-id");
+      element.dispatchEvent(new Event("xmf-viewer-v1", {bubbles: true}));
+      const value = element.getAttribute("data-xmf-media-id");
+      if (typeof value === "string" && /^\d{1,25}$/.test(value)) mediaId = value;
+    }
+    // Page metadata identifies an attachment; it never grants permission to load it.
+    let index = -1;
+    for (let i = 0; i < media.length; i++) {
+      if (!(poster ? P.sameAsset(media[i].poster, poster) : mediaId && media[i].mediaId === mediaId)) continue;
+      if (index !== -1) return -1;
+      index = i;
+    }
+    return index;
   }
   function descriptor(element) {
     if (element.matches('[data-testid="swipe-to-dismiss"]') && !P.statusId(location.href)) return null;
@@ -337,7 +353,7 @@
       event.preventDefault(); event.stopPropagation();
       if (event.isTrusted) activate(item);
     });
-    for (const type of ["pointerdown", "keydown"]) host.addEventListener(type, event => {
+    for (const type of ["pointerdown", "mousedown", "keydown"]) host.addEventListener(type, event => {
       if (!item.imageReady) event.stopPropagation();
     });
     if (getComputedStyle(element).position === "static") element.style.position = "relative";
@@ -469,7 +485,6 @@
     if (item) prepareViewer(item, link);
   }, true);
   addEventListener("message", imageState);
-  let metadataPort;
   const bridgeNonce = crypto.randomUUID();
   addEventListener("message", event => {
     if (!event.isTrusted || event.source !== window || event.origin !== location.origin || event.data?.channel !== "xmf-channel-v1" || event.ports.length !== 1) return;

@@ -10,9 +10,12 @@ const [ws,target,session='xmf-video-fix',output='/tmp/xmf-videos.json',mode='nor
 if(!ws||!target)throw new Error('Usage: node tests/videos.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal]');
 const extensionId=process.env.XMF_EXTENSION_ID||'pmkikmmocmppigkinihgchopoonpoldi';
 const capture=new MediaCapture(ws,target,mode==='cold');
-const report={version:'0.1.1',mode,results:[]};
+const report={version:'0.1.2',mode,results:[]};
 let popup,original;
-async function ab(...args){return (await exec('agent-browser',['--session',session,'--auto-connect','--pin-tab',...args],{encoding:'utf8',timeout:40000,maxBuffer:1024*1024})).stdout.trim();}
+async function ab(...args){
+  try{return (await exec('agent-browser',['--session',session,'--cdp',ws,'--pin-tab',...args],{encoding:'utf8',timeout:40000,maxBuffer:1024*1024})).stdout.trim();}
+  catch(error){throw new Error(`agent-browser ${args[0]} failed: ${error.killed?'command timeout':error.stderr?.trim()||error.code||'unknown error'}`);}
+}
 async function evaluate(code){return JSON.parse(await ab('eval','-b',Buffer.from(code).toString('base64')));}
 async function until(fn,name){
   const end=Date.now()+30000;
@@ -47,6 +50,7 @@ async function evidence(name,mark,expected){
   return requests;
 }
 try{
+  await capture.cdp.ready;
   await ab('tab',target);
   popup=JSON.parse(await ab('tab','new',`chrome-extension://${extensionId}/popup.html`,'--json')).data.targetId;
   original=await evaluate('chrome.storage.local.get("filters").then(r=>XMFPolicy.normalizeSettings(r.filters))');

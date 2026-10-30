@@ -12,6 +12,23 @@
     nativePost({channel: "xmf-channel-v1", nonce: event.detail}, location.origin, [channel.port2]);
     if (pending.length) { publish({posts: pending}); pending = []; }
   });
+  // Synchronous scalar lookup: recycled slides must not reuse an asynchronous identity cache.
+  document.addEventListener("xmf-viewer-v1", event => {
+    const element = event.target;
+    if (!element?.matches?.('[data-testid="swipe-to-dismiss"]')) return;
+    try {
+      // Host props are current; a recycled node's fiber can point to the previous render.
+      for (let node = element, depth = 0; node && depth < 20; node = node.parentElement, depth++) {
+        if (node !== element && node.querySelectorAll('[data-testid="swipe-to-dismiss"]').length !== 1) break;
+        const property = Object.keys(node).find(key => key.startsWith("__reactProps$"));
+        const media = property && node[property]?.children?.props?.mediaDetail;
+        if (!media) continue;
+        if (typeof media.id_str === "string" && /^\d{1,25}$/.test(media.id_str))
+          element.setAttribute("data-xmf-media-id", media.id_str);
+        break;
+      }
+    } catch { /* Unknown renderer metadata stays unresolved. */ }
+  });
   channel.port1.onmessage = event => {
     const request = event.data;
     if (request?.type !== "identity" || !/^[a-f0-9-]{36}$/.test(request.marker) || !/^\d{1,25}$/.test(request.postId)) return;

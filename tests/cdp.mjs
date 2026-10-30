@@ -10,6 +10,8 @@ export class CDP extends EventEmitter {
       this.socket.addEventListener('open', () => { clearTimeout(timer); resolve(); }, {once: true});
       this.socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('CDP connection failed')); }, {once: true});
     });
+    // Observe early failures without changing the rejection awaited by callers.
+    this.ready.catch(() => {});
     this.socket.addEventListener('message', event => {
       const msg = JSON.parse(event.data);
       if (msg.id) {

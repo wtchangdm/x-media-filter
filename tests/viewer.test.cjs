@@ -12,7 +12,9 @@ assert.ok(source.indexOf(marker) > 0, "content startup boundary must exist");
 const testSource = source.slice(0, source.indexOf(marker)) + `
   globalThis.viewer = {
     items, manual, viewerIdentities, prepareViewer, inheritViewer, applySettings, context, authorize,
-    message, imageState, flush, activate, viewerMediaIndex,
+    message, imageState, flush, activate, viewerMediaIndex, make,
+    posts,
+    set metadataPort(value) { metadataPort = value; },
     get epoch() { return epoch; },
     get handoff() { return viewerHandoff; },
     get grant() { return viewerGrant; }
@@ -35,9 +37,10 @@ function harness(initialURL = "https://x.com/home") {
   let sequence = 0;
   let slides = [];
   const messages = [];
+  const metadataMessages = [];
   const frames = [];
   const sandbox = vm.createContext({
-    XMFPolicy: policy, URL: ChromeURL,
+    XMFPolicy: policy, URL: ChromeURL, Event,
     chrome: { runtime: {
       getURL: path => `${extensionOrigin}/${path.replace(/^\//, "")}`,
       connect: () => ({
@@ -46,6 +49,7 @@ function harness(initialURL = "https://x.com/home") {
       }),
     } },
     location: new URL(initialURL), innerWidth: 1000, innerHeight: 800,
+    getComputedStyle: () => ({ position: "static" }),
     crypto: { randomUUID: () => `id-${++sequence}` },
     Date: class extends Date { static now() { return clock; } },
     // Leave scans queued: these tests exercise production handoff functions directly.
@@ -58,6 +62,16 @@ function harness(initialURL = "https://x.com/home") {
         return [];
       },
       createElement(tag) {
+        if (tag === "style") return {};
+        if (tag === "button") return Object.assign(new EventTarget(), { isConnected: true });
+        if (tag === "xmf-slot") return Object.assign(new EventTarget(), {
+          attachShadow() {
+            return {
+              append(first) { this.firstElementChild = first; },
+              replaceChildren(first) { this.firstElementChild = first; },
+            };
+          },
+        });
         assert.equal(tag, "iframe");
         const frame = { style: {}, contentWindow: {}, remove() { this.removed = true; } };
         frames.push(frame);
@@ -67,6 +81,7 @@ function harness(initialURL = "https://x.com/home") {
   });
   vm.runInContext(testSource, sandbox, { filename: "content.js", timeout: 1000 });
   const api = sandbox.viewer;
+  api.metadataPort = { postMessage(message) { metadataMessages.push(message); } };
   function item(overrides = {}, { swipe = false, dialog = null, anchor = null, box = {} } = {}) {
     const style = {};
     const element = {
@@ -104,45 +119,158 @@ function harness(initialURL = "https://x.com/home") {
     slides = [value.element];
     return value;
   }
-  return { api, item, add, prepare, navigate, selected, messages, frames,
+  return { api, item, add, prepare, navigate, selected, messages, metadataMessages, frames,
     show(...values) { slides = values.map(value => value.element); },
     advance(ms) { clock += ms; },
   };
 }
 
-function carousel(count, padded = false) {
-  const list = { getAttribute: name => name === "role" ? "list" : null };
-  list.children = Array.from({ length: count + (padded ? 2 : 0) }, (_, index) => ({
-    parentElement: list,
-    querySelector(selector) {
-      assert.equal(selector, '[aria-label="placeholder"] img[src^="data:image/svg+xml,"]');
-      return padded && (index === 0 || index === list.children.length - 1) ? {} : null;
-    },
-  }));
-  return list.children.map(slide => ({ closest: () => slide }));
-}
-
-for (const count of [1, 2, 4]) for (const padded of [false, true]) {
-  test(`${count}-image ${padded ? "padded" : "unpadded"} carousel maps attachment indices, not navigation sentinels`, () => {
-    const h = harness(destination), media = Array(count).fill({ poster: image });
-    const elements = carousel(count, padded);
-    assert.deepEqual(elements.map(e => h.api.viewerMediaIndex(e, media)),
-      padded ? [-1, ...Array.from({ length: count }, (_, i) => i), -1] : Array.from({ length: count }, (_, i) => i));
+for (const type of ["pointerdown", "mousedown", "keydown"]) {
+  test(`production slot ${type} stops blocked/loading/error input but passes decoded images to X`, () => {
+    const h = harness();
+    const desc = h.item();
+    const element = Object.assign(desc.element, {
+      style: {}, setAttribute() {}, append() {},
+    });
+    const item = h.api.make(element, desc);
+    function check(stopped, state) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      item.host.dispatchEvent(event);
+      assert.equal(event.cancelBubble, stopped, state);
+      assert.equal(event.defaultPrevented, false, `${state}: preserve native default behavior`);
+    }
+    check(true, "blocked placeholder");
+    h.api.authorize(item, true);
+    assert.equal(item.pending, true);
+    check(true, "pending grant");
+    h.api.message({ type: "denied", id: item.id, epoch: h.api.epoch });
+    assert.match(item.button.textContent, /retry/);
+    check(true, "denied grant error");
+    h.api.authorize(item, true);
+    h.api.message({ type: "ticket", id: item.id, epoch: h.api.epoch, token: "test-ticket" });
+    assert.ok(item.frame);
+    check(true, "renderer loading before decode");
+    h.api.imageState(imageEvent(item));
+    assert.equal(item.imageReady, true);
+    check(false, "decoded image allows native enlargement");
+    h.api.imageState(imageEvent(item, { data: { type: "xmf-image-state", ready: false } }));
+    assert.equal(item.imageReady, false);
+    check(true, "renderer error restores input isolation");
   });
 }
 
-test("unknown carousel shapes and missing metadata cannot borrow the route's image index", () => {
+function mediaElement(src = null, reply = null) {
+  return {
+    isConnected: true, attributes: {}, src, reply, events: [],
+    querySelector(selector) {
+      assert.equal(selector, "img");
+      return this.src === null ? null : { getAttribute: name => {
+        assert.equal(name, "src"); return this.src;
+      } };
+    },
+    setAttribute(name, value) { this.attributes[name] = String(value); },
+    getAttribute(name) { return this.attributes[name] ?? null; },
+    removeAttribute(name) { delete this.attributes[name]; },
+    dispatchEvent(event) {
+      assert.ok(event instanceof Event);
+      assert.equal(event.type, "xmf-viewer-v1");
+      assert.equal(event.bubbles, true);
+      assert.equal(this.getAttribute("data-xmf-media-id"), null, "clear stale scalar before the synchronous lookup");
+      this.events.push(event);
+      this.reply?.(this);
+      return true;
+    },
+    closest() { assert.fail("viewer identity must not depend on carousel ancestors"); },
+  };
+}
+
+const attachments = [
+  { type: "photo", poster: image, mediaId: "1001" },
+  { type: "photo", poster: secondImage, mediaId: "1002" },
+  { type: "video", poster: "https://pbs.twimg.com/ext_tw_video_thumb/1003/pu/img/Video.jpg", mediaId: "1003" },
+];
+
+for (const mounted of [[1], [1, 0], [null, 1, null, 0, null]]) {
+  test(`native viewer assets bind without a list, independent of mounted positions: ${JSON.stringify(mounted)}`, () => {
+    const h = harness(destination);
+    const elements = mounted.map(index => mediaElement(index === null
+      ? "data:image/svg+xml,placeholder" : attachments[index].poster.replace("small", "orig")));
+    assert.deepEqual(elements.map(element => h.api.viewerMediaIndex(element, attachments)),
+      mounted.map(index => index ?? -1));
+    assert.deepEqual(elements.map(element => element.events.length), mounted.map(index => index === null ? 1 : 0));
+    assert.equal(h.metadataMessages.length, 0, "viewer lookup never uses the metadata port");
+  });
+}
+
+test("native asset binding rejects missing, wrong and ambiguous attachment metadata without event lookup", () => {
   const h = harness(destination);
-  assert.equal(h.api.viewerMediaIndex({ closest: () => null }, [{}]), -1);
-  assert.equal(h.api.viewerMediaIndex(carousel(1)[0], []), -1);
-  assert.equal(h.api.viewerMediaIndex(carousel(3)[1], [{}]), -1, "extra non-placeholder slides are not padding");
-  const elements = carousel(1, true);
-  elements[2].closest().querySelector = () => null;
-  assert.equal(h.api.viewerMediaIndex(elements[1], [{}]), -1, "both padding markers are required");
-  const list = elements[0].closest().parentElement;
-  list.getAttribute = () => null;
-  assert.equal(h.api.viewerMediaIndex(elements[1], [{}]), -1, "list semantics are required");
+  const element = mediaElement(image, () => assert.fail("native assets must not fall back to React metadata"));
+  element.setAttribute("data-xmf-media-id", "1002");
+  for (const media of [[], [{}], [attachments[1]], [attachments[0], { ...attachments[0], poster: image.replace("small", "orig") }]]) {
+    assert.equal(h.api.viewerMediaIndex(element, media), -1);
+  }
+  assert.equal(h.api.viewerMediaIndex(element, attachments), 0, "native src takes precedence over the scalar attribute");
+  assert.equal(element.events.length, 0);
+  assert.equal(h.metadataMessages.length, 0);
 });
+
+test("synchronous lookup clears stale attributes and no reply fails closed on every read", () => {
+  const h = harness(destination);
+  const element = mediaElement();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    element.setAttribute("data-xmf-media-id", "1001");
+    assert.equal(h.api.viewerMediaIndex(element, attachments), -1);
+    assert.equal(element.getAttribute("data-xmf-media-id"), null);
+  }
+  assert.equal(element.events.length, 2);
+  assert.equal(h.metadataMessages.length, 0);
+});
+
+test("recycled slides remap a changed scalar on the same element and route without a port or cache", () => {
+  const h = harness(destination);
+  h.api.metadataPort = null;
+  let mediaId = "1002";
+  const element = mediaElement(null, target => target.setAttribute("data-xmf-media-id", mediaId));
+  assert.equal(h.api.viewerMediaIndex(element, attachments), 1, "identity, not photo/1, selects the attachment");
+  mediaId = "1001";
+  assert.equal(h.api.viewerMediaIndex(element, attachments), 0);
+  assert.equal(h.api.viewerMediaIndex(element, [...attachments].reverse()), 2, "match current metadata, not a cached index");
+  element.reply = null;
+  assert.equal(h.api.viewerMediaIndex(element, attachments), -1, "a disappearing fiber cannot retain the preceding identity");
+  assert.equal(element.events.length, 4);
+  assert.equal(h.metadataMessages.length, 0);
+});
+
+test("scalar lookup rejects missing, foreign and ambiguous attachment metadata", () => {
+  const h = harness(destination);
+  const element = mediaElement("data:image/svg+xml,placeholder",
+    target => target.setAttribute("data-xmf-media-id", "1002"));
+  for (const media of [[], [{}], [attachments[0]], [attachments[1], { ...attachments[1], poster: image }]]) {
+    assert.equal(h.api.viewerMediaIndex(element, media), -1);
+  }
+  assert.equal(h.api.viewerMediaIndex(element, attachments), 1);
+  element.reply = target => target.setAttribute("data-xmf-media-id", "9999");
+  assert.equal(h.api.viewerMediaIndex(element, attachments), -1, "a foreign attachment cannot borrow the route index");
+  assert.equal(h.metadataMessages.length, 0);
+});
+
+for (const mediaId of [undefined, null, "", "placeholder", "-1001", "1.1", "1e3", " 1001", "1".repeat(26), { id_str: "1001" }]) {
+  test(`viewer scalar lookup rejects malformed attribute ${JSON.stringify(mediaId)}`, () => {
+    const h = harness(destination);
+    const element = mediaElement(null, target => target.setAttribute("data-xmf-media-id", mediaId));
+    assert.equal(h.api.viewerMediaIndex(element, attachments), -1);
+    assert.equal(element.events.length, 1);
+    assert.equal(h.metadataMessages.length, 0);
+  });
+}
+
+for (const mediaId of ["1", "1234567890123456789012345"]) {
+  test(`viewer scalar lookup accepts a uniquely matched numeric ID of length ${mediaId.length}`, () => {
+    const h = harness(destination);
+    const element = mediaElement(null, target => target.setAttribute("data-xmf-media-id", mediaId));
+    assert.equal(h.api.viewerMediaIndex(element, [{ ...attachments[0], mediaId }]), 0);
+  });
+}
 
 function opened() {
   const h = harness();
@@ -440,13 +568,15 @@ for (const state of ["live", "pending"]) {
 
 test("a direct viewer group click tracks selected and offscreen slides and revokes both on exit", () => {
   const h = harness(destination);
+  h.api.posts.set("123", { media: attachments });
   const dialog = { isConnected: true };
   const first = track(h, h.selected({ frame: null }, { dialog }));
   const second = track(h, h.selected({ frame: null, mediaIndex: 1, poster: secondImage },
     { dialog, box: { left: 1100, right: 1700 } }));
   h.show(first, second);
   h.api.activate(first);
-  assert.equal(h.api.grant, null, "direct clicks do not need an inherited handoff");
+  assert.ok(h.api.grant, "direct clicks retain attachment-group authorization for lazy mounts");
+  assert.equal(h.api.grant.dialog, dialog);
   for (const item of [first, second]) {
     assert.equal(h.api.manual.get(item.identity), "A");
     assert.ok(h.api.viewerIdentities.has(item.identity));
@@ -462,6 +592,54 @@ test("a direct viewer group click tracks selected and offscreen slides and revok
   }
   assert.equal(h.api.viewerIdentities.size, 0);
 });
+
+for (const revoke of ["exit", "settings"]) {
+  test(`direct viewer clicks authorize lazy photo siblings only in the selected live dialog, revoked on ${revoke}`, () => {
+    const h = harness(destination);
+    h.api.posts.set("123", { media: attachments });
+    const dialog = { isConnected: true };
+    const first = track(h, h.selected({ frame: null }, { dialog }));
+    h.api.activate(first);
+    assert.deepEqual([...h.api.grant.assets], attachments.slice(0, 2).map((media, index) => `${index}|${policy.assetKey(media.poster)}`));
+    assert.equal(h.api.items.size, 1, "the second attachment is not mounted at click time");
+    assert.equal(h.messages.filter(message => message.type === "grant").length, 1);
+    h.navigate(destination.replace("photo/1", "photo/2"));
+    for (const [label, overrides, options] of [
+      ["offscreen", {}, { dialog, box: { left: 1100, right: 1700 } }],
+      ["other dialog", {}, { dialog: { isConnected: true } }],
+      ["wrong index", { mediaIndex: 0 }, { dialog }],
+      ["wrong asset", { poster: image }, { dialog }],
+      ["wrong post", { attachmentPost: "456" }, { dialog }],
+      ["video", { kind: "video", poster: attachments[2].poster }, { dialog }],
+    ]) {
+      const rejected = h.selected({ mediaIndex: 1, poster: secondImage, frame: null, ...overrides }, options);
+      h.api.inheritViewer(rejected);
+      assert.equal(h.api.manual.has(rejected.identity), false, label);
+    }
+    const lazy = track(h, h.selected({ mediaIndex: 1, poster: secondImage.replace("small", "orig"), frame: null }, { dialog }));
+    h.api.inheritViewer(lazy);
+    assert.equal(h.api.manual.get(lazy.identity), "A");
+    assert.ok(h.api.viewerIdentities.has(lazy.identity));
+    h.api.authorize(lazy);
+    assert.equal(lazy.pending, true);
+    assert.equal(h.messages.filter(message => message.type === "grant").length, 2);
+    if (revoke === "exit") h.navigate(destination.replace("/photo/1", ""));
+    else {
+      h.api.applySettings({ a: false, c: true, b: true });
+      h.api.applySettings({ a: true, c: true, b: true });
+    }
+    assert.equal(h.api.grant, null);
+    assert.equal(h.api.viewerIdentities.size, 0);
+    for (const item of [first, lazy]) {
+      assert.equal(h.api.manual.has(item.identity), false);
+      assert.equal(item.pending, false);
+      assert.equal(item.frame, null);
+    }
+    const later = h.selected({ mediaIndex: 1, poster: secondImage }, { dialog });
+    h.api.inheritViewer(later);
+    assert.equal(h.api.manual.has(later.identity), false);
+  });
+}
 
 test("stable identity upgrades retain viewer tracking so same-status exit revokes the upgraded grant", () => {
   const h = harness(destination);
