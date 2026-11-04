@@ -5,4 +5,6 @@
 [data-xmf-covered] { isolation: isolate; }
 /* X can reuse a fixed-width image wrapper from the wider post in the viewer sidebar. */
 a[href*="/status/"] > :has([data-xmf-covered]) { max-width: 100%; }
+/* One route-selected surface, outside X's animated/recycled slides. */
+xmf-viewer { position: absolute; inset: 0; display: block; z-index: 3; }
 xmf-slot { visibility: visible !important; position: absolute !important; inset: 0 !important; z-index: 3 !important; display: block !important; min-height: 80px; }

@@ -22,7 +22,7 @@
   let viewerHandoff = null;
   let viewerGrant = null;
   const viewerIdentities = new Set();
-  let viewerRetryTimer;
+  let viewerSurface = null;
 
   function clearViewerGrants() {
     viewerGrant = null;
@@ -32,24 +32,60 @@
     viewerIdentities.clear();
   }
 
-  function retryViewer(attempt = 0, path = location.pathname) {
-    clearTimeout(viewerRetryTimer);
-    if (!/\/photo\/\d+$/.test(path) || attempt >= 10) return;
-    viewerRetryTimer = setTimeout(() => {
-      if (location.pathname !== path) return;
-      queue(document.querySelector('[role="dialog"]'));
-      retryViewer(attempt + 1, path);
-    }, 150);
-  }
   function selectedViewer(element, mediaIndex) {
-    if (mediaIndex !== Number(location.pathname.match(/\/photo\/(\d+)$/)?.[1]) - 1) return false;
-    // X mounts offscreen slides too. Never grant those or a sidebar/duplicate occurrence.
-    const selected = [...document.querySelectorAll('[role="dialog"] [data-testid="swipe-to-dismiss"]')].filter(candidate => {
-      const box = candidate.getBoundingClientRect();
-      return box.width > 0 && box.height > 0 && box.left >= -1 && box.right <= innerWidth + 1 &&
-        box.top < innerHeight && box.bottom > 0;
-    });
-    return selected.length === 1 && selected[0] === element;
+    return element === viewerSurface?.element && viewerSurface.dialog.isConnected &&
+      viewerSurface.postId === P.statusId(location.href) && mediaIndex === Number(location.pathname.match(/\/photo\/(\d+)$/)?.[1]) - 1;
+  }
+  function removeViewerSurface() {
+    if (!viewerSurface) return;
+    const item = items.get(viewerSurface.element);
+    if (item) { reset(item); items.delete(item.element); }
+    viewerSurface.element.remove();
+    viewerSurface = null;
+  }
+  function syncViewer() {
+    if (!/\/photo\/\d+$/.test(location.pathname)) { removeViewerSurface(); return; }
+    // Native DOM locates the display area only, never the selected attachment or its grant.
+    const stages = new Map();
+    for (const swipe of document.querySelectorAll('[role="dialog"] [data-testid="swipe-to-dismiss"]')) {
+      if (swipe.closest('article')) continue;
+      const dialog = swipe.closest('[role="dialog"]');
+      const list = swipe.closest('[role="list"]');
+      const stage = list && dialog.contains(list) ? list.parentElement : swipe.parentElement;
+      if (stage && stage !== dialog && dialog.contains(stage)) stages.set(stage, dialog);
+    }
+    if (stages.size !== 1) {
+      if (viewerSurface) { clearViewerGrants(); removeViewerSurface(); }
+      return;
+    }
+    const [stage, dialog] = stages.entries().next().value;
+    if (viewerSurface && viewerSurface.dialog !== dialog) { clearViewerGrants(); removeViewerSurface(); }
+    if (!viewerSurface) {
+      viewerSurface = {element: document.createElement("xmf-viewer"), dialog,
+        postId: P.statusId(location.href), nonce: ++articleSequence};
+    }
+    const element = viewerSurface.element;
+    if (element.parentElement !== stage) {
+      const item = items.get(element);
+      if (item) reset(item);
+      if (getComputedStyle(stage).position === "static") stage.style.position = "relative";
+      stage.append(element);
+    }
+    const desc = viewerDescriptor();
+    let item = items.get(element);
+    if (item && item.base !== desc.base) { reset(item); item.host.remove(); items.delete(element); item = null; }
+    if (!item) make(element, desc);
+    else { Object.assign(item, desc); if (!item.host.isConnected) element.append(item.host); }
+  }
+  function viewerDescriptor() {
+    const postId = P.statusId(location.href);
+    const mediaIndex = Number(location.pathname.match(/\/photo\/(\d+)$/)?.[1]) - 1;
+    const attachment = posts.get(postId)?.media[mediaIndex];
+    const poster = attachment?.type === "photo" ? attachment.poster : null;
+    return {isViewer: true, postId, attachmentPost: postId, author: posts.get(postId)?.author || null,
+      mediaIndex, poster, kind: "image", video: null, mediaId: attachment?.mediaId || null,
+      base: [postId, "viewer", mediaIndex, poster ? P.assetKey(poster) : "unresolved"].join("|"),
+      occurrence: "viewer:" + viewerSurface.nonce, boundaryNonce: viewerSurface.nonce};
   }
   function imageKey(item) { return item.mediaIndex + "|" + P.assetKey(item.poster); }
   function prepareViewer(item, link) {
@@ -79,7 +115,7 @@
   }
   function inheritViewer(item) {
     if (!viewerGrant || item.kind !== "image" || !item.poster || !viewerGrant.assets.has(imageKey(item)) ||
-        P.statusId(location.href) !== item.attachmentPost || !item.element.matches('[data-testid="swipe-to-dismiss"]')) return;
+        P.statusId(location.href) !== item.attachmentPost || !item.isViewer) return;
     const dialog = item.element.closest('[role="dialog"]');
     if (!dialog || (viewerGrant.dialog && viewerGrant.dialog !== dialog)) return;
     if (!selectedViewer(item.element, item.mediaIndex)) return;
@@ -112,7 +148,11 @@
     document.documentElement?.toggleAttribute("data-xmf-status", !!P.statusId(location.href));
     const next = P.routeKey(location.href);
     updateViewer(next);
-    if (locationURL !== location.href) retryViewer();
+    if (locationURL !== location.href && viewerSurface) {
+      const item = items.get(viewerSurface.element);
+      if (item && !selectedViewer(item.element, item.mediaIndex)) reset(item);
+      if (!/\/photo\/\d+$/.test(location.pathname) || viewerSurface.postId !== P.statusId(location.href)) removeViewerSurface();
+    }
     if (next === route) {
       if (locationURL !== location.href) { locationURL = location.href; queue(document); }
       return;
@@ -170,12 +210,11 @@
     // Refresh descriptors before grouping so recycled nodes cannot inherit a click.
     context(); dirty.add(document); flush();
     if (items.get(item.element) !== item) return;
-    if (item.kind === "image" && item.element.matches('[data-testid="swipe-to-dismiss"]') &&
-        selectedViewer(item.element, item.mediaIndex)) {
+    if (item.isViewer && selectedViewer(item.element, item.mediaIndex)) {
       // Remember the whole attachment group, including siblings X has not mounted yet.
       const assets = new Set();
       for (const [mediaIndex, media] of (posts.get(item.attachmentPost)?.media || []).entries()) {
-        if (media.type === "photo") assets.add(imageKey({mediaIndex, poster: media.poster}));
+        if (media.type === "photo" && media.poster) assets.add(imageKey({mediaIndex, poster: media.poster}));
       }
       viewerGrant = {route, assets, category: category(item), dialog: item.element.closest('[role="dialog"]')};
     }
@@ -204,13 +243,12 @@
       return;
     }
     if (clicked) {
-      if (item.kind === "image" && item.element.matches('[data-testid="swipe-to-dismiss"]')) viewerIdentities.add(item.identity);
+      if (item.isViewer) viewerIdentities.add(item.identity);
       manual.set(item.identity, category(item));
       if (manual.size > 1000) manual.delete(manual.keys().next().value);
     }
-    // Remember a direct viewer click for the image group, but fetch only the selected slide.
-    if (item.kind === "image" && item.element.matches('[data-testid="swipe-to-dismiss"]') &&
-        !selectedViewer(item.element, item.mediaIndex)) return;
+    // Only the single extension-owned surface can use a viewer authorization.
+    if (item.isViewer && !selectedViewer(item.element, item.mediaIndex)) return;
     if (!port) connect();
     if (!port) { item.button.textContent = "Extension unavailable — reload this X tab to retry"; return; }
     item.workerCategory = category(item);
@@ -257,27 +295,9 @@
     return P.classify({focusId: focus, focusAuthor, postId: item.postId, postAuthor: item.author,
       relationship: relationship(item.postId)});
   }
-  function viewerMediaIndex(element, media) {
-    if (!media.length) return -1;
-    const poster = P.mediaURL(element.querySelector("img")?.getAttribute("src"), "image");
-    let mediaId = null;
-    if (!poster) {
-      element.removeAttribute("data-xmf-media-id");
-      element.dispatchEvent(new Event("xmf-viewer-v1", {bubbles: true}));
-      const value = element.getAttribute("data-xmf-media-id");
-      if (typeof value === "string" && /^\d{1,25}$/.test(value)) mediaId = value;
-    }
-    // Page metadata identifies an attachment; it never grants permission to load it.
-    let index = -1;
-    for (let i = 0; i < media.length; i++) {
-      if (!(poster ? P.sameAsset(media[i].poster, poster) : mediaId && media[i].mediaId === mediaId)) continue;
-      if (index !== -1) return -1;
-      index = i;
-    }
-    return index;
-  }
   function descriptor(element) {
-    if (element.matches('[data-testid="swipe-to-dismiss"]') && !P.statusId(location.href)) return null;
+    if (element.matches('[data-testid="swipe-to-dismiss"]') &&
+        (!P.statusId(location.href) || /\/photo\/\d+$/.test(location.pathname))) return null;
     const article = element.closest('article[data-testid="tweet"]');
     let owner = outerPost(article);
     // Media grids and viewers may not contain an article. Their status link is an item boundary.
@@ -306,9 +326,7 @@
     const isViewer = element.matches('[data-testid="swipe-to-dismiss"]');
     const linkIndex = (isViewer ? location.pathname : link?.pathname)?.match(/\/(?:photo|video)\/(\d+)/)?.[1];
     const metadata = posts.get(attachmentPost)?.media || [];
-    const mediaIndex = isViewer && /\/photo\/\d+$/.test(location.pathname)
-      ? viewerMediaIndex(element, metadata)
-      : linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
+    const mediaIndex = linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
     if (mediaIndex < 0) return null;
     const cached = items.get(element);
     const poster = domPoster ||
@@ -409,6 +427,7 @@
       focusAuthor ||= posts.get(P.statusId(location.href))?.author || null;
     }
     for (const root of roots) if (root && (root === document || root.isConnected)) scan(root);
+    syncViewer();
     const identities = new Map();
     const imageGroups = new Map();
     for (const [element, item] of items) {
@@ -423,7 +442,9 @@
       identities.get(identity).push(item);
     }
     for (const group of imageGroups.values()) for (const item of group) {
-      item.imageCount = group.length;
+      item.imageCount = item.isViewer
+        ? (posts.get(item.attachmentPost)?.media || []).filter(media => media.type === "photo" && media.poster).length
+        : group.length;
       if (!item.pending && !item.frame && item.button.textContent.includes(" blocked — "))
         item.button.textContent = blockedLabel(item);
     }
@@ -518,8 +539,9 @@
       for (const entry of raw.media.slice(0, 16)) {
         const poster = P.mediaURL(entry?.poster, "image");
         const mediaId = typeof entry?.mediaId === "string" && /^\d{1,25}$/.test(entry.mediaId) ? entry.mediaId : null;
-        if (poster) media.push({poster, mediaId, video: P.chooseVideo(entry.variants, poster, mediaId)?.url || null,
-          type: ["photo", "video", "animated_gif"].includes(entry.type) ? entry.type : "photo"});
+        // Preserve attachment ordinals: dropping a malformed entry would shift /photo/N.
+        media.push({poster, mediaId, video: P.chooseVideo(entry?.variants, poster, mediaId)?.url || null,
+          type: ["photo", "video", "animated_gif"].includes(entry?.type) ? entry.type : null});
       }
       posts.delete(raw.id);
       posts.set(raw.id, {id: raw.id, author: typeof raw.author === "string" && /^[A-Za-z0-9_]{1,15}$/.test(raw.author) ? raw.author.toLowerCase() : null,
@@ -551,7 +573,7 @@
   addEventListener("scroll", () => queue(null), {passive: true});
   addEventListener("pagehide", () => {
     manual.clear(); ambiguousIdentities.clear(); viewerHandoff = null; clearViewerGrants(); epoch = crypto.randomUUID();
-    clearTimeout(viewerRetryTimer);
+    removeViewerSurface();
     for (const item of items.values()) reset(item);
     port?.disconnect();
   });

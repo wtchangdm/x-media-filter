@@ -9,11 +9,16 @@ const policy = require("../extension/policy.js");
 const source = fs.readFileSync(require.resolve("../extension/content.js"), "utf8");
 const marker = "  // Keep X's real anchor";
 assert.ok(source.indexOf(marker) > 0, "content startup boundary must exist");
-const testSource = source.slice(0, source.indexOf(marker)) + `
+const metadataStart = source.indexOf("  function observeMetadata(data) {");
+const metadataEnd = source.indexOf("  chrome.runtime.onMessage.addListener", metadataStart);
+assert.ok(metadataStart > 0 && metadataEnd > metadataStart, "metadata observer boundary must exist");
+const testSource = source.slice(0, source.indexOf(marker)) + source.slice(metadataStart, metadataEnd) + `
   globalThis.viewer = {
     items, manual, viewerIdentities, prepareViewer, inheritViewer, applySettings, context, authorize,
-    message, imageState, flush, activate, viewerMediaIndex, make,
-    posts,
+    message, imageState, flush, activate, make, observeMetadata,
+    syncViewer, viewerDescriptor, selectedViewer, removeViewerSurface, posts,
+    get surface() { return viewerSurface; },
+    set surface(value) { viewerSurface = value; },
     set metadataPort(value) { metadataPort = value; },
     get epoch() { return epoch; },
     get handoff() { return viewerHandoff; },
@@ -32,10 +37,54 @@ class ChromeURL extends URL {
   get origin() { return this.protocol === "chrome-extension:" ? `${this.protocol}//${this.host}` : super.origin; }
 }
 
+// A small connected tree: append moves nodes, closest/contains follow ancestry, and
+// removing a stage disconnects its descendants just as native DOM replacement does.
+function node(tag, attributes = {}) {
+  const value = Object.assign(new EventTarget(), {
+    tag, attributes, style: {}, dataset: {}, children: [], parentElement: null,
+    matches(selector) {
+      return selector.split(", ").some(part => part === tag ||
+        part === `[role="${attributes.role}"]` || part === `[data-testid="${attributes["data-testid"]}"]`);
+    },
+    closest(selector) {
+      for (let current = this; current; current = current.parentElement) if (current.matches(selector)) return current;
+      return null;
+    },
+    contains(other) {
+      for (let current = other; current; current = current.parentElement) if (current === this) return true;
+      return false;
+    },
+    querySelectorAll(selector) {
+      return this.children.flatMap(child => [
+        ...(child.matches(selector) ? [child] : []), ...child.querySelectorAll(selector),
+      ]);
+    },
+    querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
+    append(...children) {
+      for (const child of children) {
+        child.remove(); child.parentElement = this; this.children.push(child);
+      }
+    },
+    remove() {
+      if (this.parentElement) this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1);
+      this.parentElement = null;
+    },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    getAttribute(name) { return this.attributes[name] ?? null; },
+    removeAttribute(name) { delete this.attributes[name]; },
+    getBoundingClientRect() { return { width: 600, height: 600, left: 100, right: 700, top: 50, bottom: 650 }; },
+  });
+  Object.defineProperty(value, "isConnected", {
+    get() { return this.rootConnected || !!this.parentElement?.isConnected; },
+  });
+  return value;
+}
+
 function harness(initialURL = "https://x.com/home") {
   let clock = 100000;
   let sequence = 0;
   let slides = [];
+  let nativeDialog = null;
   const messages = [];
   const metadataMessages = [];
   const frames = [];
@@ -57,14 +106,15 @@ function harness(initialURL = "https://x.com/home") {
     document: {
       documentElement: { toggleAttribute() {} },
       querySelectorAll(selector) {
-        if (selector === `${dialogSelector} ${swipeSelector}`) return slides;
+        if (selector === `${dialogSelector} ${swipeSelector}`) return slides.filter(slide => slide.isConnected);
         assert.ok([ 'article[data-testid="tweet"]', '[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="swipe-to-dismiss"]' ].includes(selector));
-        return [];
+        return selector.startsWith('[data-testid="tweetPhoto"]') ? slides.filter(slide => slide.isConnected) : [];
       },
       createElement(tag) {
         if (tag === "style") return {};
         if (tag === "button") return Object.assign(new EventTarget(), { isConnected: true });
-        if (tag === "xmf-slot") return Object.assign(new EventTarget(), {
+        if (tag === "xmf-viewer") return node(tag);
+        if (tag === "xmf-slot") return Object.assign(node(tag), {
           attachShadow() {
             return {
               append(first) { this.firstElementChild = first; },
@@ -86,6 +136,8 @@ function harness(initialURL = "https://x.com/home") {
     const style = {};
     const element = {
       isConnected: true,
+      remove() { this.isConnected = false; },
+      removeAttribute() {},
       matches(selector) { assert.equal(selector, swipeSelector); return swipe; },
       closest(selector) {
         if (selector === photoSelector) return anchor;
@@ -100,7 +152,7 @@ function harness(initialURL = "https://x.com/home") {
       kind: "image", poster: image, mediaIndex: 0, attachmentPost: "123",
       postId: "123", author: "author", boundaryNonce: 1,
       base: `base-${sequence}`, occurrence: "dom:1", localIdentity: `local-${sequence}`,
-      host: { dataset: {} },
+      host: { dataset: {}, remove() { this.removed = true; } },
       imageReady: true, frame: { style: {}, contentWindow: {}, remove() { this.removed = true; } }, element, style,
       button: { isConnected: true, disabled: false, textContent: "" },
       shadow: { firstElementChild: style, replaceChildren() {} },
@@ -115,12 +167,23 @@ function harness(initialURL = "https://x.com/home") {
   function prepare(value, url = destination) { api.prepareViewer(value, new URL(url)); }
   function navigate(url) { sandbox.location = new URL(url); api.context(); }
   function selected(overrides, options = {}) {
-    const value = item(overrides, { swipe: true, dialog: { isConnected: true }, ...options });
-    slides = [value.element];
+    const dialog = Object.hasOwn(options, "dialog") ? options.dialog : { isConnected: true };
+    const value = item({ isViewer: true, ...overrides }, { swipe: false, ...options, dialog });
+    if (options.owned !== false) api.surface = { element: value.element, dialog, postId: value.postId, nonce: ++sequence };
     return value;
   }
   return { api, item, add, prepare, navigate, selected, messages, metadataMessages, frames,
-    show(...values) { slides = values.map(value => value.element); },
+    mount({ list = true, count = 1, dialog = nativeDialog } = {}) {
+      if (!dialog) { dialog = node("div", { role: "dialog" }); dialog.rootConnected = true; }
+      nativeDialog = dialog;
+      const stage = node("div"); dialog.append(stage);
+      const container = list ? node("div", { role: "list" }) : stage;
+      if (list) stage.append(container);
+      const mounted = Array.from({ length: count }, () => node("div", { "data-testid": "swipe-to-dismiss" }));
+      container.append(...mounted); slides = mounted;
+      return { dialog, stage, container, slides: mounted };
+    },
+    show(...values) { slides = values.map(value => value.element || value); },
     advance(ms) { clock += ms; },
   };
 }
@@ -159,117 +222,297 @@ for (const type of ["pointerdown", "mousedown", "keydown"]) {
   });
 }
 
-function mediaElement(src = null, reply = null) {
-  return {
-    isConnected: true, attributes: {}, src, reply, events: [],
-    querySelector(selector) {
-      assert.equal(selector, "img");
-      return this.src === null ? null : { getAttribute: name => {
-        assert.equal(name, "src"); return this.src;
-      } };
-    },
-    setAttribute(name, value) { this.attributes[name] = String(value); },
-    getAttribute(name) { return this.attributes[name] ?? null; },
-    removeAttribute(name) { delete this.attributes[name]; },
-    dispatchEvent(event) {
-      assert.ok(event instanceof Event);
-      assert.equal(event.type, "xmf-viewer-v1");
-      assert.equal(event.bubbles, true);
-      assert.equal(this.getAttribute("data-xmf-media-id"), null, "clear stale scalar before the synchronous lookup");
-      this.events.push(event);
-      this.reply?.(this);
-      return true;
-    },
-    closest() { assert.fail("viewer identity must not depend on carousel ancestors"); },
-  };
-}
-
 const attachments = [
   { type: "photo", poster: image, mediaId: "1001" },
   { type: "photo", poster: secondImage, mediaId: "1002" },
   { type: "video", poster: "https://pbs.twimg.com/ext_tw_video_thumb/1003/pu/img/Video.jpg", mediaId: "1003" },
 ];
 
-for (const mounted of [[1], [1, 0], [null, 1, null, 0, null]]) {
-  test(`native viewer assets bind without a list, independent of mounted positions: ${JSON.stringify(mounted)}`, () => {
-    const h = harness(destination);
-    const elements = mounted.map(index => mediaElement(index === null
-      ? "data:image/svg+xml,placeholder" : attachments[index].poster.replace("small", "orig")));
-    assert.deepEqual(elements.map(element => h.api.viewerMediaIndex(element, attachments)),
-      mounted.map(index => index ?? -1));
-    assert.deepEqual(elements.map(element => element.events.length), mounted.map(index => index === null ? 1 : 0));
-    assert.equal(h.metadataMessages.length, 0, "viewer lookup never uses the metadata port");
+for (const list of [true, false]) {
+  for (const count of [1, 3, 5]) {
+    test(`one owned surface uses the native stage (list=${list}, slides=${count}), not slide identity`, () => {
+      const h = harness(destination.replace("photo/1", "photo/2"));
+      h.api.observeMetadata({ posts: [{ id: "123", media: attachments }] });
+      const native = h.mount({ list, count });
+      // Native slides may be errors, sentinels, duplicates, or recycled assets.
+      native.slides.forEach((slide, index) => {
+        slide.__reactProps$test = { children: { props: { mediaDetail: { id_str: String(1001 + index) } } } };
+        const img = node("img", { src: index % 2 ? image : "data:image/svg+xml,placeholder" });
+        slide.append(img);
+      });
+      h.api.flush();
+      const surface = h.api.surface;
+      const item = h.api.items.get(surface.element);
+      assert.equal(surface.element.tag, "xmf-viewer");
+      assert.equal(surface.element.parentElement, native.stage);
+      assert.equal(surface.dialog, native.dialog);
+      assert.equal(surface.postId, "123");
+      assert.equal(h.api.items.size, 1);
+      assert.equal(item.mediaIndex, 1);
+      assert.equal(item.poster, secondImage);
+      assert.equal(item.isViewer, true);
+      assert.equal(item.occurrence, `viewer:${surface.nonce}`);
+      assert.equal(item.imageCount, 2);
+      assert.match(item.button.textContent, /2 images blocked/);
+      assert.equal(h.api.selectedViewer(surface.element, 1), true);
+      for (const slide of native.slides) {
+        assert.equal(h.api.items.has(slide), false);
+        assert.equal(h.api.selectedViewer(slide, 1), false);
+        assert.equal(slide.children.some(child => child.tag === "xmf-slot"), false);
+      }
+      assert.equal(h.metadataMessages.length, 0, "owned surface never requests a React identity");
+      assert.equal(h.messages.filter(message => message.type === "grant").length, 0);
+      native.container.append(...[...native.slides].reverse());
+      h.api.flush();
+      assert.equal(h.api.surface, surface);
+      assert.equal(h.api.items.get(surface.element), item);
+      assert.equal(item.poster, secondImage);
+    });
+  }
+}
+
+test("selection requires the owned element, current status, route ordinal and connected dialog, never geometry", () => {
+  const h = harness(destination);
+  const item = h.selected();
+  item.element.getBoundingClientRect = () => assert.fail("selection is not a geometry decision");
+  assert.equal(h.api.selectedViewer(item.element, 0), true);
+  assert.equal(h.api.selectedViewer(h.item().element, 0), false);
+  assert.equal(h.api.selectedViewer(item.element, 1), false);
+  h.api.surface.postId = "456";
+  assert.equal(h.api.selectedViewer(item.element, 0), false);
+  h.api.surface.postId = "123";
+  h.api.surface.dialog.isConnected = false;
+  assert.equal(h.api.selectedViewer(item.element, 0), false);
+});
+
+for (const [label, media, ordinal, poster] of [
+  ["missing post", null, 1, null],
+  ["empty metadata", [], 1, null],
+  ["missing ordinal", attachments, 4, null],
+  ["video at photo ordinal", attachments, 3, null],
+  ["malformed leading slot", [{}, attachments[1]], 1, null],
+  ["valid slot after malformed slot", [{}, attachments[1]], 2, secondImage],
+  ["duplicate assets keep their ordinals", [attachments[0], attachments[0]], 2, image],
+]) {
+  test(`route-owned descriptor handles ${label} without borrowing native slide metadata`, () => {
+    const h = harness(destination.replace("photo/1", `photo/${ordinal}`));
+    if (media) h.api.posts.set("123", { media });
+    h.mount();
+    h.api.flush();
+    const item = h.api.items.get(h.api.surface.element);
+    assert.equal(item.mediaIndex, ordinal - 1);
+    assert.equal(item.poster, poster);
+    assert.equal(item.kind, "image");
+    assert.equal(item.video, null);
+    if (!poster) {
+      h.api.activate(item);
+      assert.match(item.button.textContent, /waiting for X metadata/);
+      assert.equal(h.messages.filter(message => message.type === "grant").length, 0);
+    }
   });
 }
 
-test("native asset binding rejects missing, wrong and ambiguous attachment metadata without event lookup", () => {
+test("metadata sanitization preserves malformed slots and late metadata replaces unresolved descriptors", () => {
+  const h = harness(destination.replace("photo/1", "photo/4"));
+  h.mount();
+  h.api.flush();
+  const surface = h.api.surface;
+  const unresolved = h.api.items.get(surface.element);
+  assert.equal(unresolved.poster, null);
+  h.api.observeMetadata({ posts: [{ id: "123", media: [
+    null, { type: "photo", poster: "https://example.com/private.jpg" },
+    { type: "invalid", poster: image }, attachments[1],
+  ] }] });
+  const media = h.api.posts.get("123").media;
+  assert.equal(media.length, 4);
+  assert.equal(media[0].poster, null);
+  assert.equal(media[1].poster, null);
+  assert.equal(media[2].type, null);
+  assert.equal(media[3].poster, secondImage);
+  h.api.flush();
+  const resolved = h.api.items.get(surface.element);
+  assert.equal(h.api.surface, surface);
+  assert.notEqual(resolved, unresolved);
+  assert.equal(unresolved.host.isConnected, false);
+  assert.equal(resolved.mediaIndex, 3);
+  assert.equal(resolved.poster, secondImage);
+  assert.equal(resolved.occurrence, unresolved.occurrence);
+  assert.equal(h.messages.filter(message => message.type === "grant").length, 0);
+});
+
+test("stage replacement and lazy/reordered slides keep one owned identity without native slide grants", () => {
   const h = harness(destination);
-  const element = mediaElement(image, () => assert.fail("native assets must not fall back to React metadata"));
-  element.setAttribute("data-xmf-media-id", "1002");
-  for (const media of [[], [{}], [attachments[1]], [attachments[0], { ...attachments[0], poster: image.replace("small", "orig") }]]) {
-    assert.equal(h.api.viewerMediaIndex(element, media), -1);
+  h.api.posts.set("123", { media: attachments });
+  const first = h.mount({ count: 3 });
+  h.api.flush();
+  const surface = h.api.surface;
+  const selected = h.api.items.get(surface.element);
+  h.api.activate(selected);
+  const oldId = selected.id;
+  const ticket = { type: "ticket", id: oldId, epoch: h.api.epoch, token: "stale-stage" };
+  first.stage.remove();
+  const next = h.mount({ list: false, count: 1, dialog: first.dialog });
+  h.api.flush();
+  assert.equal(h.api.surface, surface);
+  assert.equal(surface.element.parentElement, next.stage);
+  assert.equal(h.api.items.size, 1);
+  assert.equal(h.api.items.get(surface.element), selected);
+  assert.notEqual(selected.id, oldId);
+  assert.equal(selected.pending, true, "the retained selected grant may obtain a fresh ticket");
+  h.api.message(ticket);
+  assert.equal(h.frames.length, 0, "replaced-stage ticket cannot create a frame");
+  const lazy = node("div", { "data-testid": "swipe-to-dismiss" });
+  next.container.append(lazy);
+  h.show(lazy, ...next.slides);
+  h.api.flush();
+  assert.equal(h.api.items.size, 1);
+  assert.equal(h.api.items.get(surface.element), selected);
+  assert.equal(h.api.items.has(lazy), false);
+  assert.equal(h.messages.filter(message => message.type === "grant").length, 2);
+});
+
+test("a replacement dialog revokes the previous owned occurrence instead of inheriting it", () => {
+  const h = harness(destination);
+  h.api.posts.set("123", { media: attachments });
+  const first = h.mount();
+  h.api.flush();
+  const oldSurface = h.api.surface;
+  const oldItem = h.api.items.get(oldSurface.element);
+  h.api.activate(oldItem);
+  first.dialog.rootConnected = false;
+  h.mount({ dialog: null });
+  h.api.flush();
+  assert.notEqual(h.api.surface.nonce, oldSurface.nonce);
+  assert.equal(h.api.grant, null);
+  assert.equal(h.api.manual.has(oldItem.identity), false);
+  assert.equal(oldItem.pending, false);
+  assert.equal(oldSurface.element.isConnected, false);
+  assert.equal(h.api.items.size, 1);
+  assert.equal(h.messages.filter(message => message.type === "grant").length, 1);
+});
+
+test("a detached dialog with no replacement removes its surface and revokes pending grants", () => {
+  const h = harness(destination);
+  h.api.posts.set("123", { media: attachments });
+  const native = h.mount();
+  h.api.flush();
+  const item = h.api.items.get(h.api.surface.element);
+  h.api.activate(item);
+  const ticket = { type: "ticket", id: item.id, epoch: h.api.epoch, token: "closed-dialog" };
+  native.dialog.rootConnected = false;
+  h.api.flush();
+  assert.equal(h.api.surface, null);
+  assert.equal(h.api.grant, null);
+  assert.equal(h.api.items.size, 0);
+  assert.equal(h.api.manual.has(item.identity), false);
+  assert.equal(item.pending, false);
+  h.api.message(ticket);
+  assert.equal(h.frames.length, 0);
+});
+
+test("automatic loading requests only the route selection and disabling eligibility revokes it", () => {
+  const h = harness(destination);
+  h.api.posts.set("123", { media: attachments });
+  h.mount({ count: 5 });
+  h.api.applySettings({ a: false, c: true, b: true });
+  h.api.flush();
+  const surface = h.api.surface;
+  const first = h.api.items.get(surface.element);
+  assert.equal(first.pending, true);
+  assert.equal(h.api.grant, null, "automatic eligibility does not create a manual viewer group grant");
+  assert.equal(h.api.manual.size, 0);
+  h.navigate(destination.replace("photo/1", "photo/2"));
+  assert.equal(first.pending, false);
+  h.api.flush();
+  const second = h.api.items.get(surface.element);
+  assert.equal(second.pending, true);
+  assert.deepEqual(h.messages.filter(message => message.type === "grant").map(message => message.url), [image, secondImage]);
+  assert.ok(h.messages.filter(message => message.type === "grant").every(message => message.manual === false));
+  h.api.applySettings({ a: true, c: true, b: true });
+  h.api.flush();
+  assert.equal(second.pending, false);
+  assert.equal(second.frame, null);
+  assert.equal(h.messages.filter(message => message.type === "grant").length, 2);
+});
+
+test("swipe elements in a tweet article do not locate a viewer stage", () => {
+  const h = harness(destination);
+  const native = h.mount();
+  const article = node("article");
+  native.stage.append(article);
+  article.append(...native.slides);
+  h.api.flush();
+  assert.equal(h.api.surface, null);
+  assert.equal(h.api.items.size, 0);
+});
+
+test("ambiguous native stages cannot create or authorize an owned surface", () => {
+  const h = harness(destination);
+  h.api.posts.set("123", { media: attachments });
+  const first = h.mount();
+  const second = h.mount();
+  h.show(...first.slides, ...second.slides);
+  h.api.flush();
+  assert.equal(h.api.surface, null);
+  assert.equal(h.api.items.size, 0);
+  assert.equal(h.messages.filter(message => message.type === "grant").length, 0);
+});
+
+for (const stages of ["ambiguous", "absent"]) {
+  for (const state of ["pending", "live"]) {
+    test(`${stages} stages remove an existing ${state} manual viewer and reject delayed tickets`, () => {
+      const h = harness(destination);
+      h.api.posts.set("123", { media: attachments });
+      const first = h.mount();
+      h.api.flush();
+      const surface = h.api.surface;
+      const item = h.api.items.get(surface.element);
+      h.api.activate(item);
+      const ticket = { type: "ticket", id: item.id, epoch: h.api.epoch, token: "stale-selection" };
+      assert.equal(item.pending, true);
+      assert.equal(h.api.manual.get(item.identity), "A");
+      if (state === "live") h.api.message(ticket);
+      const frame = item.frame;
+      const frameCount = h.frames.length;
+      let second;
+      if (stages === "ambiguous") {
+        second = h.mount();
+        h.show(...first.slides, ...second.slides);
+      } else {
+        for (const slide of first.slides) slide.remove();
+      }
+      assert.equal(surface.element.isConnected, true, "the old stage and dialog remain connected");
+      h.api.flush();
+      assert.equal(h.api.surface, null);
+      assert.equal(surface.element.isConnected, false);
+      assert.equal(h.api.items.size, 0);
+      assert.equal(h.api.grant, null);
+      assert.equal(h.api.manual.has(item.identity), false);
+      assert.equal(h.api.viewerIdentities.size, 0);
+      assert.equal(item.pending, false);
+      assert.equal(item.frame, null);
+      if (frame) assert.equal(frame.removed, true);
+      assert.ok(h.messages.some(message => message.type === "revoke" && message.id === ticket.id));
+      h.api.message(ticket);
+      assert.equal(h.frames.length, frameCount, "a delayed ticket cannot recreate the removed renderer");
+      assert.equal(h.messages.at(-1).type, "revoke");
+      assert.equal(h.messages.at(-1).id, ticket.id);
+      h.api.authorize(item, true);
+      h.api.activate(item);
+      assert.equal(h.messages.filter(message => message.type === "grant").length, 1);
+
+      // A later unambiguous stage starts a fresh, blocked occurrence, not the old group grant.
+      second?.stage.remove();
+      h.show(...first.slides);
+      if (stages === "absent") first.container.append(...first.slides);
+      h.api.flush();
+      const replacement = h.api.items.get(h.api.surface.element);
+      assert.notEqual(h.api.surface.nonce, surface.nonce);
+      assert.equal(replacement.pending, false);
+      assert.equal(h.api.manual.has(replacement.identity), false);
+      assert.equal(h.messages.filter(message => message.type === "grant").length, 1);
+    });
   }
-  assert.equal(h.api.viewerMediaIndex(element, attachments), 0, "native src takes precedence over the scalar attribute");
-  assert.equal(element.events.length, 0);
-  assert.equal(h.metadataMessages.length, 0);
-});
-
-test("synchronous lookup clears stale attributes and no reply fails closed on every read", () => {
-  const h = harness(destination);
-  const element = mediaElement();
-  for (let attempt = 0; attempt < 2; attempt++) {
-    element.setAttribute("data-xmf-media-id", "1001");
-    assert.equal(h.api.viewerMediaIndex(element, attachments), -1);
-    assert.equal(element.getAttribute("data-xmf-media-id"), null);
-  }
-  assert.equal(element.events.length, 2);
-  assert.equal(h.metadataMessages.length, 0);
-});
-
-test("recycled slides remap a changed scalar on the same element and route without a port or cache", () => {
-  const h = harness(destination);
-  h.api.metadataPort = null;
-  let mediaId = "1002";
-  const element = mediaElement(null, target => target.setAttribute("data-xmf-media-id", mediaId));
-  assert.equal(h.api.viewerMediaIndex(element, attachments), 1, "identity, not photo/1, selects the attachment");
-  mediaId = "1001";
-  assert.equal(h.api.viewerMediaIndex(element, attachments), 0);
-  assert.equal(h.api.viewerMediaIndex(element, [...attachments].reverse()), 2, "match current metadata, not a cached index");
-  element.reply = null;
-  assert.equal(h.api.viewerMediaIndex(element, attachments), -1, "a disappearing fiber cannot retain the preceding identity");
-  assert.equal(element.events.length, 4);
-  assert.equal(h.metadataMessages.length, 0);
-});
-
-test("scalar lookup rejects missing, foreign and ambiguous attachment metadata", () => {
-  const h = harness(destination);
-  const element = mediaElement("data:image/svg+xml,placeholder",
-    target => target.setAttribute("data-xmf-media-id", "1002"));
-  for (const media of [[], [{}], [attachments[0]], [attachments[1], { ...attachments[1], poster: image }]]) {
-    assert.equal(h.api.viewerMediaIndex(element, media), -1);
-  }
-  assert.equal(h.api.viewerMediaIndex(element, attachments), 1);
-  element.reply = target => target.setAttribute("data-xmf-media-id", "9999");
-  assert.equal(h.api.viewerMediaIndex(element, attachments), -1, "a foreign attachment cannot borrow the route index");
-  assert.equal(h.metadataMessages.length, 0);
-});
-
-for (const mediaId of [undefined, null, "", "placeholder", "-1001", "1.1", "1e3", " 1001", "1".repeat(26), { id_str: "1001" }]) {
-  test(`viewer scalar lookup rejects malformed attribute ${JSON.stringify(mediaId)}`, () => {
-    const h = harness(destination);
-    const element = mediaElement(null, target => target.setAttribute("data-xmf-media-id", mediaId));
-    assert.equal(h.api.viewerMediaIndex(element, attachments), -1);
-    assert.equal(element.events.length, 1);
-    assert.equal(h.metadataMessages.length, 0);
-  });
-}
-
-for (const mediaId of ["1", "1234567890123456789012345"]) {
-  test(`viewer scalar lookup accepts a uniquely matched numeric ID of length ${mediaId.length}`, () => {
-    const h = harness(destination);
-    const element = mediaElement(null, target => target.setAttribute("data-xmf-media-id", mediaId));
-    assert.equal(h.api.viewerMediaIndex(element, [{ ...attachments[0], mediaId }]), 0);
-  });
 }
 
 function opened() {
@@ -377,41 +620,31 @@ test("pending handoff and unmounted viewer grant expire after five seconds", () 
   assert.equal(mountedLate.api.manual.has(viewer.identity), false);
 });
 
-for (const [label, options] of [
-  ["offscreen right slide", { box: { left: 1100, right: 1700 } }],
-  ["offscreen left slide", { box: { left: -700, right: -100 } }],
-  ["partially horizontal offscreen slide", { box: { left: -10, right: 590 } }],
-  ["slide below viewport", { box: { top: 800, bottom: 1400 } }],
-  ["slide above viewport", { box: { top: -600, bottom: 0 } }],
-  ["zero-width slide", { box: { width: 0 } }],
-  ["zero-height slide", { box: { height: 0 } }],
-  ["sidebar image", { swipe: false }],
-  ["viewer outside a dialog", { dialog: null }],
+for (const [label, overrides, options] of [
+  ["native swipe slide", { isViewer: false }, { swipe: true, owned: false }],
+  ["sidebar copy", { isViewer: false }, { owned: false }],
+  ["unowned duplicate surface", {}, { owned: false }],
+  ["disconnected dialog", {}, { dialog: { isConnected: false } }],
+  ["viewer outside a dialog", {}, { dialog: null }],
 ]) {
   test(`viewer inheritance excludes ${label}`, () => {
     const h = opened();
-    const viewer = h.selected({}, options);
+    h.selected();
+    const viewer = h.selected(overrides, options);
     h.api.inheritViewer(viewer);
     assert.equal(h.api.manual.has(viewer.identity), false);
     assert.equal(h.api.grant.dialog, null);
   });
 }
 
-test("two visible viewer occurrences are ambiguous, but offscreen siblings do not block the selected slide", () => {
+test("owned viewer inherits despite empty or animated geometry; visible native duplicates cannot", () => {
   const h = opened();
-  const selected = h.selected();
-  const duplicate = h.selected();
-  h.show(selected, duplicate);
-  for (const value of [selected, duplicate]) {
-    h.api.inheritViewer(value);
-    assert.equal(h.api.manual.has(value.identity), false);
-  }
-  const offscreen = h.selected({}, { box: { left: 1100, right: 1700 } });
-  h.show(selected, offscreen);
+  const selected = h.selected({}, { box: { width: 0, height: 0, left: 1100, right: 1700 } });
+  const duplicate = h.selected({}, { owned: false });
+  h.api.inheritViewer(duplicate);
   h.api.inheritViewer(selected);
-  h.api.inheritViewer(offscreen);
   assert.equal(h.api.manual.get(selected.identity), "A");
-  assert.equal(h.api.manual.has(offscreen.identity), false);
+  assert.equal(h.api.manual.has(duplicate.identity), false);
 });
 
 test("gallery permits only snapshotted asset/index pairs in the original live dialog", () => {
@@ -460,14 +693,16 @@ for (const url of ["https://x.com/author/status/123", "https://x.com/author/stat
   });
 }
 
-test("final authorization remembers an explicit viewer group click without fetching offscreen slides", () => {
+test("final authorization cannot fetch an unowned surface even with an explicit manual grant", () => {
   const h = opened();
-  const viewer = h.selected({frame: null}, {box: {left: 1100, right: 1700}});
+  h.selected();
+  const viewer = h.selected({ frame: null }, { owned: false });
   h.api.authorize(viewer, false);
-  assert.equal(h.api.manual.has(viewer.identity), false, "automatic eligibility is not a group click");
+  assert.equal(h.api.manual.has(viewer.identity), false);
   h.api.authorize(viewer, true);
-  assert.equal(h.api.manual.get(viewer.identity), "A", "direct viewer selection retains group authorization");
+  assert.equal(h.api.manual.get(viewer.identity), "A");
   assert.equal(viewer.pending, undefined, "no worker grant was attempted");
+  assert.equal(h.messages.filter(message => message.type === "grant").length, 0);
 });
 
 test("a still-visible previous slide cannot inherit the next photo's authorization during animation", () => {
@@ -566,63 +801,45 @@ for (const state of ["live", "pending"]) {
   });
 }
 
-test("a direct viewer group click tracks selected and offscreen slides and revokes both on exit", () => {
-  const h = harness(destination);
-  h.api.posts.set("123", { media: attachments });
-  const dialog = { isConnected: true };
-  const first = track(h, h.selected({ frame: null }, { dialog }));
-  const second = track(h, h.selected({ frame: null, mediaIndex: 1, poster: secondImage },
-    { dialog, box: { left: 1100, right: 1700 } }));
-  h.show(first, second);
-  h.api.activate(first);
-  assert.ok(h.api.grant, "direct clicks retain attachment-group authorization for lazy mounts");
-  assert.equal(h.api.grant.dialog, dialog);
-  for (const item of [first, second]) {
-    assert.equal(h.api.manual.get(item.identity), "A");
-    assert.ok(h.api.viewerIdentities.has(item.identity));
-  }
-  assert.equal(first.pending, true);
-  assert.ok(!second.pending, "offscreen group members must not fetch");
-  assert.equal(h.messages.filter(message => message.type === "grant").length, 1);
-  h.navigate(destination.replace("/photo/1", ""));
-  for (const item of [first, second]) {
-    assert.equal(h.api.manual.has(item.identity), false);
-    assert.equal(item.pending, false);
-    assert.equal(item.frame, null);
-  }
-  assert.equal(h.api.viewerIdentities.size, 0);
-});
-
 for (const revoke of ["exit", "settings"]) {
-  test(`direct viewer clicks authorize lazy photo siblings only in the selected live dialog, revoked on ${revoke}`, () => {
+  test(`direct group click requests only the route-selected asset, including lazy navigation; revoked on ${revoke}`, () => {
     const h = harness(destination);
     h.api.posts.set("123", { media: attachments });
-    const dialog = { isConnected: true };
-    const first = track(h, h.selected({ frame: null }, { dialog }));
+    const native = h.mount({ count: 3 });
+    h.api.flush();
+    const surface = h.api.surface;
+    const first = h.api.items.get(surface.element);
     h.api.activate(first);
     assert.deepEqual([...h.api.grant.assets], attachments.slice(0, 2).map((media, index) => `${index}|${policy.assetKey(media.poster)}`));
-    assert.equal(h.api.items.size, 1, "the second attachment is not mounted at click time");
+    assert.equal(h.api.grant.dialog, native.dialog);
+    assert.equal(h.api.items.size, 1);
     assert.equal(h.messages.filter(message => message.type === "grant").length, 1);
+    assert.equal(h.messages.find(message => message.type === "grant").url, image);
+    const oldTicket = { type: "ticket", id: first.id, epoch: h.api.epoch, token: "previous-photo" };
+
     h.navigate(destination.replace("photo/1", "photo/2"));
-    for (const [label, overrides, options] of [
-      ["offscreen", {}, { dialog, box: { left: 1100, right: 1700 } }],
-      ["other dialog", {}, { dialog: { isConnected: true } }],
-      ["wrong index", { mediaIndex: 0 }, { dialog }],
-      ["wrong asset", { poster: image }, { dialog }],
-      ["wrong post", { attachmentPost: "456" }, { dialog }],
-      ["video", { kind: "video", poster: attachments[2].poster }, { dialog }],
-    ]) {
-      const rejected = h.selected({ mediaIndex: 1, poster: secondImage, frame: null, ...overrides }, options);
-      h.api.inheritViewer(rejected);
-      assert.equal(h.api.manual.has(rejected.identity), false, label);
-    }
-    const lazy = track(h, h.selected({ mediaIndex: 1, poster: secondImage.replace("small", "orig"), frame: null }, { dialog }));
-    h.api.inheritViewer(lazy);
-    assert.equal(h.api.manual.get(lazy.identity), "A");
-    assert.ok(h.api.viewerIdentities.has(lazy.identity));
-    h.api.authorize(lazy);
-    assert.equal(lazy.pending, true);
-    assert.equal(h.messages.filter(message => message.type === "grant").length, 2);
+    assert.equal(first.pending, false, "route change revokes the preceding selection synchronously");
+    h.api.message(oldTicket);
+    assert.equal(h.frames.length, 0);
+    // No matching native asset is needed: X may retain only a previous slide or SVG sentinel.
+    native.slides[0].__reactProps$test = { children: { props: { mediaDetail: { id_str: "1001" } } } };
+    h.show(native.slides[0]);
+    h.api.flush();
+    const second = h.api.items.get(surface.element);
+    assert.notEqual(second, first);
+    assert.equal(second.poster, secondImage);
+    assert.equal(second.mediaIndex, 1);
+    assert.equal(second.pending, true);
+    assert.ok(h.api.viewerIdentities.has(second.identity));
+    assert.equal(h.api.items.size, 1);
+    assert.deepEqual(h.messages.filter(message => message.type === "grant").map(message => message.url), [image, secondImage]);
+
+    // Returning to a photo still creates a ticket for that single selection, not its siblings.
+    h.navigate(destination);
+    h.api.flush();
+    const returned = h.api.items.get(surface.element);
+    assert.equal(returned.mediaIndex, 0);
+    assert.deepEqual(h.messages.filter(message => message.type === "grant").map(message => message.url), [image, secondImage, image]);
     if (revoke === "exit") h.navigate(destination.replace("/photo/1", ""));
     else {
       h.api.applySettings({ a: false, c: true, b: true });
@@ -630,35 +847,62 @@ for (const revoke of ["exit", "settings"]) {
     }
     assert.equal(h.api.grant, null);
     assert.equal(h.api.viewerIdentities.size, 0);
-    for (const item of [first, lazy]) {
+    for (const item of [first, second, returned]) {
       assert.equal(h.api.manual.has(item.identity), false);
       assert.equal(item.pending, false);
       assert.equal(item.frame, null);
     }
-    const later = h.selected({ mediaIndex: 1, poster: secondImage }, { dialog });
-    h.api.inheritViewer(later);
-    assert.equal(h.api.manual.has(later.identity), false);
+    if (revoke === "exit") assert.equal(h.api.surface, null);
+    else {
+      h.api.flush();
+      assert.equal(h.messages.filter(message => message.type === "grant").length, 3);
+    }
   });
 }
 
-test("stable identity upgrades retain viewer tracking so same-status exit revokes the upgraded grant", () => {
-  const h = harness(destination);
-  const item = track(h, h.selected({ frame: null }, { box: { left: 1100, right: 1700 } }));
-  item.identity = `${item.base}|${item.occurrence}`;
-  h.api.authorize(item, true);
-  const previousIdentity = item.identity;
-  item.occurrence = "react:stable-viewer";
-  h.api.flush();
-  assert.notEqual(item.identity, previousIdentity);
-  assert.equal(item.identity, `${item.base}|react:stable-viewer`);
-  assert.equal(h.api.manual.has(previousIdentity), false);
-  assert.equal(h.api.viewerIdentities.has(previousIdentity), false);
-  assert.equal(h.api.manual.get(item.identity), "A");
-  assert.ok(h.api.viewerIdentities.has(item.identity));
-  h.navigate(destination.replace("/photo/1", ""));
-  assert.equal(h.api.manual.has(item.identity), false);
-  assert.equal(h.api.viewerIdentities.size, 0);
-});
+for (const state of ["blocked", "pending", "live"]) {
+  test(`cross-status navigation at the same ordinal removes a ${state} viewer before queued scans`, () => {
+    const h = harness(destination);
+    h.api.posts.set("123", { media: attachments });
+    h.api.posts.set("456", { media: [attachments[1]] });
+    h.mount();
+    h.api.flush();
+    const surface = h.api.surface;
+    const item = h.api.items.get(surface.element);
+    if (state !== "blocked") h.api.activate(item);
+    const ticket = { type: "ticket", id: item.id, epoch: h.api.epoch, token: "previous-status" };
+    if (state === "live") h.api.message(ticket);
+    const frame = item.frame;
+    const frameCount = h.frames.length;
+    const grantCount = h.messages.filter(message => message.type === "grant").length;
+    h.navigate(destination.replace("/123/", "/456/"));
+    assert.equal(h.api.surface, null, "context removes the old surface synchronously, without flush");
+    assert.equal(surface.element.isConnected, false);
+    assert.equal(h.api.items.size, 0);
+    assert.equal(h.api.selectedViewer(item.element, 0), false);
+    assert.equal(h.api.grant, null);
+    assert.equal(h.api.manual.has(item.identity), false);
+    assert.equal(h.api.viewerIdentities.size, 0);
+    assert.equal(item.pending, false);
+    assert.equal(item.frame, null);
+    if (frame) assert.equal(frame.removed, true);
+    h.api.authorize(item, true);
+    h.api.message(ticket);
+    assert.equal(h.frames.length, frameCount);
+    assert.equal(h.messages.filter(message => message.type === "grant").length, grantCount,
+      "a manual authorization before the queued scan cannot fetch the previous status asset");
+    h.api.flush();
+    const replacement = h.api.items.get(h.api.surface.element);
+    assert.notEqual(h.api.surface.nonce, surface.nonce);
+    assert.equal(h.api.surface.postId, "456");
+    assert.equal(replacement.poster, secondImage);
+    assert.equal(replacement.mediaIndex, 0);
+    assert.equal(replacement.pending, false);
+    h.api.activate(item);
+    assert.equal(h.messages.filter(message => message.type === "grant").length, grantCount,
+      "a stale click cannot authorize the new occurrence either");
+  });
+}
 
 for (const surface of ["inline anchor", "dialog Close"]) {
   test(`validated ready state restores focused renderer to the native ${surface}`, () => {

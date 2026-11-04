@@ -10,9 +10,10 @@ const [ws, target, session = 'xmf-scope', output = '/tmp/xmf-scope.json', mode =
 if (!ws || !target) throw new Error('Usage: node tests/scope.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal]');
 const extensionId = process.env.XMF_EXTENSION_ID || 'pmkikmmocmppigkinihgchopoonpoldi';
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version: '0.1.2', mode, routes: ['https://x.com/<test-profile>', 'https://x.com/<test-profile>/photo', 'https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1'], results: []};
+const report = {version: '0.1.3', mode, routes: ['https://x.com/ArtificialAnlys', 'https://x.com/ArtificialAnlys/photo', 'https://x.com/ArtificialAnlys/status/2110893784422908225/photo/1'], results: []};
 const profileRequests = new Map();
 let popup, original;
+const profilePath = '/ArtificialAnlys';
 // Retain only request outcomes for excluded profile images, never headers or bodies.
 capture.cdp.on('event', event => {
   if (!capture.sessions.has(event.sessionId)) return;
@@ -25,7 +26,11 @@ capture.cdp.on('event', event => {
   if (event.method === 'Network.loadingFailed') request.error = p.errorText;
 });
 async function ab(...args) {
-  return (await exec('agent-browser', ['--session', session, '--auto-connect', '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim();
+  try {
+    return (await exec('agent-browser', ['--session', session, '--cdp', ws, '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim();
+  } catch (error) {
+    throw new Error(`agent-browser ${args[0]} failed: ${error.killed ? 'command timeout' : error.stderr?.trim() || error.code || 'unknown error'}`);
+  }
 }
 async function evaluate(code) { return JSON.parse(await ab('eval', '-b', Buffer.from(code).toString('base64'))); }
 async function until(fn, name) {
@@ -44,7 +49,7 @@ async function settings(filters) {
 }
 const avatar = () => evaluate(`(()=>{const v=document.querySelector('[data-testid="swipe-to-dismiss"]');const i=v?.querySelector('img');return {route:location.pathname,statusScope:document.documentElement.hasAttribute('data-xmf-status'),visible:!!i&&getComputedStyle(i).visibility==='visible'&&i.getBoundingClientRect().width>0,decoded:!!i&&i.naturalWidth>0,profile:!!i&&i.src.includes('/profile_images/'),covered:!!v&&v.hasAttribute('data-xmf-covered'),slots:v?.querySelectorAll('xmf-slot').length??0}})()`);
 async function assertAvatar(name, mark) {
-  await until(async () => { const a = await avatar(); return a.route === '/<test-profile>/photo' && a.decoded && a.visible; }, name);
+  await until(async () => { const a = await avatar(); return a.route === profilePath + '/photo' && a.decoded && a.visible; }, name);
   const state = await avatar();
   assert.equal(state.profile, true); assert.equal(state.statusScope, false);
   assert.equal(state.covered, false); assert.equal(state.slots, 0);
@@ -55,6 +60,7 @@ async function assertAvatar(name, mark) {
   console.log('PASS', name);
 }
 try {
+  await capture.cdp.ready;
   await ab('tab', target);
   popup = JSON.parse(await ab('tab', 'new', `chrome-extension://${extensionId}/popup.html`, '--json')).data.targetId;
   original = await evaluate('chrome.storage.local.get("filters").then(r=>XMFPolicy.normalizeSettings(r.filters))');
@@ -63,28 +69,28 @@ try {
   await capture.start(); report.browser = capture.version; report.observedSiteWorkerTargets = capture.siteWorkerTargets;
   let mark = capture.mark();
   await ab('open', report.routes[0]);
-  await until(() => evaluate(`!!document.querySelector('a[href="/<test-profile>/photo"] img')?.naturalWidth`), 'profile avatar');
+  await until(() => evaluate(`!!document.querySelector('a[href="${profilePath}/photo"] img')?.naturalWidth`), 'profile avatar');
   // Controlled DOM fixtures exercise selector scope, not network prevention.
   await evaluate(`(()=>{const f=document.createElement('div');f.id='xmf-scope-fixture';f.innerHTML='<div data-testid="tweetPhoto">Non-post photo</div><div data-testid="videoPlayer">Non-post video</div><div data-testid="swipe-to-dismiss">Non-post dialog</div>';document.body.append(f);return true})()`);
   await until(() => evaluate(`[...document.querySelectorAll('#xmf-scope-fixture > div')].every(e=>getComputedStyle(e).visibility==='visible')`), 'non-post selector scope');
   assert.equal(await evaluate(`document.querySelectorAll('#xmf-scope-fixture xmf-slot').length`), 0);
   await evaluate(`(()=>{document.getElementById('xmf-scope-fixture').remove();return true})()`);
   report.results.push({name: 'non-post photo/video/dialog DOM fixtures remain visible', passed: true});
-  await ab('click', 'a[href="/<test-profile>/photo"]');
+  await ab('click', `a[href="${profilePath}/photo"]`);
   await assertAvatar('profile avatar click', mark);
   mark = capture.mark(); await ab('reload');
   await assertAvatar('direct avatar startup', mark);
 
   mark = capture.mark(); await ab('open', report.routes[2]);
-  await until(() => evaluate(`!!document.querySelector('[data-testid="swipe-to-dismiss"] > xmf-slot[data-ready="true"]')`), 'post viewer placeholder');
-  const before = await evaluate(`(()=>{const v=document.querySelector('[data-testid="swipe-to-dismiss"]');const s=v.querySelector('xmf-slot');return {statusScope:document.documentElement.hasAttribute('data-xmf-status'),nativeHidden:getComputedStyle(v).visibility==='hidden',placeholderVisible:getComputedStyle(s).visibility==='visible',loaded:[...document.querySelectorAll('xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')).length}})()`);
+  await until(() => evaluate(`!!document.querySelector('xmf-viewer > xmf-slot[data-ready="true"]')`), 'post viewer placeholder');
+  const before = await evaluate(`(()=>{const v=document.querySelector('[data-testid="swipe-to-dismiss"]');const s=document.querySelector('xmf-viewer xmf-slot');return {statusScope:document.documentElement.hasAttribute('data-xmf-status'),nativeHidden:getComputedStyle(v).visibility==='hidden',placeholderVisible:getComputedStyle(s).visibility==='visible',loaded:[...document.querySelectorAll('xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')).length}})()`);
   assert.deepEqual(before, {statusScope: true, nativeHidden: true, placeholderVisible: true, loaded: 0});
   await until(() => capture.since(mark).some(r => r.error === 'net::ERR_BLOCKED_BY_CLIENT'), 'post pre-click barrier');
   assert.ok(capture.since(mark).every(r => r.status === null), 'no post payload before click');
   // The first gallery shell precedes X's focused-post/metadata hydration.
   await until(() => evaluate(`!![...document.querySelectorAll('[role="dialog"] article time')].find(t=>t.closest('a')?.pathname==='/ArtificialAnlys/status/2110893784422908225')`), 'viewer focused post hydration');
   await new Promise(r => setTimeout(r, 2500));
-  await ab('click', '[data-testid="swipe-to-dismiss"] > xmf-slot');
+  await ab('click', 'xmf-viewer > xmf-slot');
   await until(async () => (await capture.player()).some(p => p.width > 0), 'authorized viewer image');
   await until(() => capture.since(mark).every(r => r.error || r.finished), 'post request outcomes');
   const requests = capture.since(mark), success = requests.filter(r => r.status >= 200 && r.status < 300);
@@ -99,10 +105,10 @@ try {
   await ab('click', '[role="dialog"] button[aria-label="Close"]');
   await until(() => evaluate(`location.pathname==='/ArtificialAnlys/status/2110893784422908225'`), 'close post viewer');
   mark = capture.mark();
-  await ab('click', 'nav[aria-label="Primary"] a[href="/<test-profile>"]');
-  await until(() => evaluate(`location.pathname==='/<test-profile>'&&!document.documentElement.hasAttribute('data-xmf-status')&&!!document.querySelector('a[href="/<test-profile>/photo"] img')?.naturalWidth`), 'SPA profile route');
+  await ab('find', 'first', `article [data-testid="User-Name"] a[href="${profilePath}"]`, 'click');
+  await until(() => evaluate(`location.pathname==='${profilePath}'&&!document.documentElement.hasAttribute('data-xmf-status')&&!!document.querySelector('a[href="${profilePath}/photo"] img')?.naturalWidth`), 'SPA profile route');
   assert.equal(await evaluate('performance.timeOrigin'), timeOrigin, 'real SPA navigation preserves document');
-  await ab('click', 'a[href="/<test-profile>/photo"]');
+  await ab('click', `a[href="${profilePath}/photo"]`);
   await assertAvatar('avatar after post-viewer SPA navigation', mark);
   assert.equal(await evaluate('performance.timeOrigin'), timeOrigin);
   assert.equal(capture.failures.length, 0, capture.failures.join('\n'));
@@ -110,7 +116,7 @@ try {
 } catch (error) {
   report.passed = false; report.error = String(error); process.exitCode = 1; console.error(String(error));
   try {
-    report.failureState = await evaluate(`({route:location.pathname,active:document.activeElement?.tagName,viewers:[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] > xmf-slot')].map(s=>({ready:s.dataset.ready,label:s.shadowRoot.querySelector('button')?.textContent,focused:s.shadowRoot.activeElement?.tagName,frame:!!s.shadowRoot.querySelector('iframe')}))})`);
+    report.failureState = await evaluate(`({route:location.pathname,active:document.activeElement?.tagName,viewers:[...document.querySelectorAll('xmf-viewer > xmf-slot')].map(s=>({ready:s.dataset.ready,label:s.shadowRoot.querySelector('button')?.textContent,focused:s.shadowRoot.activeElement?.tagName,frame:!!s.shadowRoot.querySelector('iframe')}))})`);
     report.players = await capture.player();
   } catch {}
 } finally {

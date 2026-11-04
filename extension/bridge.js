@@ -12,23 +12,6 @@
     nativePost({channel: "xmf-channel-v1", nonce: event.detail}, location.origin, [channel.port2]);
     if (pending.length) { publish({posts: pending}); pending = []; }
   });
-  // Synchronous scalar lookup: recycled slides must not reuse an asynchronous identity cache.
-  document.addEventListener("xmf-viewer-v1", event => {
-    const element = event.target;
-    if (!element?.matches?.('[data-testid="swipe-to-dismiss"]')) return;
-    try {
-      // Host props are current; a recycled node's fiber can point to the previous render.
-      for (let node = element, depth = 0; node && depth < 20; node = node.parentElement, depth++) {
-        if (node !== element && node.querySelectorAll('[data-testid="swipe-to-dismiss"]').length !== 1) break;
-        const property = Object.keys(node).find(key => key.startsWith("__reactProps$"));
-        const media = property && node[property]?.children?.props?.mediaDetail;
-        if (!media) continue;
-        if (typeof media.id_str === "string" && /^\d{1,25}$/.test(media.id_str))
-          element.setAttribute("data-xmf-media-id", media.id_str);
-        break;
-      }
-    } catch { /* Unknown renderer metadata stays unresolved. */ }
-  });
   channel.port1.onmessage = event => {
     const request = event.data;
     if (request?.type !== "identity" || !/^[a-f0-9-]{36}$/.test(request.marker) || !/^\d{1,25}$/.test(request.postId)) return;
@@ -64,8 +47,8 @@
         const author = user?.core?.screen_name || user?.legacy?.screen_name;
         const media = [];
         for (const entry of (legacy.extended_entities?.media || []).slice(0, 16)) {
-          const poster = entry.media_url_https;
-          if (typeof poster !== "string") continue;
+          const poster = entry?.media_url_https;
+          if (typeof poster !== "string") { media.push({}); continue; }
           const variants = (entry.video_info?.variants || []).slice(0, 16).map(v => ({url: v.url, content_type: v.content_type, bitrate: v.bitrate}));
           media.push({poster, type: entry.type, variants, mediaId: entry.id_str,
             key: String(entry.media_key || entry.id_str || "").slice(0, 100),

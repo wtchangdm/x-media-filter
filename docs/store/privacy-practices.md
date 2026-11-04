@@ -1,6 +1,6 @@
 # Privacy practices — submission draft
 
-Based on **0.1.2 source code**. These are draft disclosures for publisher review, not a record of dashboard certifications. Local-only processing still requires disclosure; no developer backend does not mean no user data is handled.
+Based on **0.1.3 source code**. These are draft disclosures for publisher review, not a record of dashboard certifications. Local-only processing still requires disclosure; no developer backend does not mean no user data is handled.
 
 ## Single purpose — paste copy
 
@@ -78,7 +78,7 @@ If affirmative consent is also required, text alone is insufficient. The flow wo
 
 ## Official references
 
-Previously checked 2026-10-17. Recheck the final dashboard wording at submission.
+Recheck the final dashboard wording at submission.
 
 - [Privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy)
 - [User Data FAQ — local handling and prominent disclosure](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)

@@ -29,7 +29,7 @@ if (scope === 'single' && !single) throw new Error('Set XMF_SINGLE_PHOTO_URL for
 const redact = value => [[single, 'private-single-photo-fixture'], [suppliedAlbum, 'private-album-fixture']]
   .reduce((text, [url, label]) => url ? text.replaceAll(url, label).replaceAll(new URL(url).pathname, label) : text, String(value));
 const capture = new MediaCapture(ws, target, mode === 'cold');
-const report = {version: '0.1.2', mode, scope, results: []};
+const report = {version: '0.1.3', mode, scope, results: []};
 let popup, original;
 async function ab(...args) {
   try {
@@ -47,7 +47,7 @@ async function until(fn, name) {
   try {
     diagnostics = await evaluate(`(()=>{
       const slots=[...document.querySelectorAll('xmf-slot')].filter(s=>s.isConnected);
-      const viewer=slots.filter(s=>s.closest('[data-testid="swipe-to-dismiss"]'));
+      const viewer=slots.filter(s=>s.closest('xmf-viewer'));
       const visible=viewer.filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&r.bottom>0&&r.top<innerHeight});
       const statusId=location.pathname.match(/\\/status\\/(\\d+)/)?.[1];
       return {routeType:location.protocol==='chrome-extension:'?'extension':location.pathname==='/home'?'home':/\\/status\\/\\d+\\/photo\\/\\d+/.test(location.pathname)?'photo':statusId?'status':'other',
@@ -71,31 +71,21 @@ async function settings(a) {
   await until(() => evaluate(`['a','c','b'].every(k=>!document.getElementById(k).disabled)`), 'settings saved');
   await ab('tab', target);
 }
-// Check the native attachment's photo URL, not merely a decoded frame left from the previous slide.
-const matchesViewerRoute = String(function (slot) {
-  for (let node = slot.parentElement, depth = 0; node && depth < 20; node = node.parentElement, depth++) {
-    const key = Object.keys(node).find(key => key.startsWith('__reactProps$'));
-    const media = key && node[key]?.children?.props?.mediaDetail;
-    if (media) return typeof media.expanded_url === 'string' &&
-      new URL(media.expanded_url, location.origin).pathname.match(/\/status\/\d+\/photo\/\d+$/)?.[0] ===
-      location.pathname.match(/\/status\/\d+\/photo\/\d+$/)?.[0];
-  }
-  return false;
-});
+// The owned surface replaces its renderer synchronously on photo-route changes.
 let viewerReadiness;
 async function viewerReady() {
-  const state = await evaluate(`(()=>{const slots=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none'&&(${matchesViewerRoute})(s)});if(slots.length!==1)return null;const s=slots[0],r=s.getBoundingClientRect();return JSON.stringify([performance.timeOrigin,location.pathname,s.parentElement.getAttribute('data-xmf-media-id'),r.x.toFixed(1),r.y.toFixed(1),r.width.toFixed(1),r.height.toFixed(1)])})()`);
+  const state = await evaluate(`(()=>{const slots=[...document.querySelectorAll('xmf-viewer xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none'});if(slots.length!==1)return null;const s=slots[0],r=s.getBoundingClientRect();return JSON.stringify([performance.timeOrigin,location.pathname,r.x.toFixed(1),r.y.toFixed(1),r.width.toFixed(1),r.height.toFixed(1)])})()`);
   if (!state || viewerReadiness?.state !== state) {
     viewerReadiness = state ? {state, since: Date.now()} : null;
     return false;
   }
-  // A route update can precede X's carousel animation; a decoded old slide is not readiness.
+  // Wait for stable decoded geometry; native controls may still be settling.
   return Date.now() - viewerReadiness.since >= 200;
 }
 const noFrames = () => evaluate(`[...document.querySelectorAll('xmf-slot')].every(s=>!s.shadowRoot.querySelector('iframe'))`);
 // Use the visible iframe's CDP frame identity, never a page-provided media URL.
 const visibleViewerFrame = `(()=>{
-  const slots=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&r.bottom>0&&r.top<innerHeight});
+  const slots=[...document.querySelectorAll('xmf-viewer xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&r.bottom>0&&r.top<innerHeight});
   return slots.length===1?slots[0].shadowRoot?.querySelector('iframe'):null;
 })()`;
 async function rendererForFrame(expression) {
@@ -119,8 +109,8 @@ async function rendererForFrame(expression) {
   }
   return null;
 }
-async function selectedViewerAsset() {
-  const renderer = await rendererForFrame(visibleViewerFrame);
+async function selectedViewerAsset(expression = visibleViewerFrame) {
+  const renderer = await rendererForFrame(expression);
   if (!renderer) return null;
   const reply = await capture.cdp.call('Runtime.evaluate', {expression: `(()=>{
     if(location.origin!==${JSON.stringify(`chrome-extension://${id}`)}||location.pathname!=='/player.html')return null;
@@ -173,7 +163,7 @@ async function choose(route) {
 async function pointerSelect(viewer = false, placeholder = false) {
   await capture.cdp.call('Page.bringToFront', {}, capture.root);
   await until(async () => {
-    const point = await evaluate(`(()=>{let s=document.querySelector('#xmf-viewer-selected');if(${viewer}){const visible=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1&&(${matchesViewerRoute})(s)});if(visible.length!==1)return false;if(s!==visible[0])s?.removeAttribute('id');s=visible[0];s.id='xmf-viewer-selected'}if(!s||${placeholder}&&!s.shadowRoot.querySelector('button'))return false;const r=s.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2),hit=document.elementFromPoint(x,y);if(!(x>=0&&x<innerWidth&&y>=0&&y<innerHeight&&hit&&(hit===s||s.contains(hit)||!!s.closest('a')&&hit.closest('a')===s.closest('a'))))return false;const previous=window.__xmfPointerCandidate;if(previous?.element!==s||previous.x!==x||previous.y!==y||previous.path!==location.pathname){window.__xmfPointerCandidate={element:s,x,y,path:location.pathname,since:performance.now()};return false}return performance.now()-previous.since>=200?{x,y}:false})()`);
+    const point = await evaluate(`(()=>{let s=document.querySelector('#xmf-viewer-selected');if(${viewer}){const visible=[...document.querySelectorAll('xmf-viewer xmf-slot')].filter(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1});if(visible.length!==1)return false;if(s!==visible[0])s?.removeAttribute('id');s=visible[0];s.id='xmf-viewer-selected'}if(!s||${placeholder}&&!s.shadowRoot.querySelector('button'))return false;const r=s.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2),hit=document.elementFromPoint(x,y);if(!(x>=0&&x<innerWidth&&y>=0&&y<innerHeight&&hit&&(hit===s||s.contains(hit)||!!s.closest('a')&&hit.closest('a')===s.closest('a'))))return false;const previous=window.__xmfPointerCandidate;if(previous?.element!==s||previous.x!==x||previous.y!==y||previous.path!==location.pathname){window.__xmfPointerCandidate={element:s,x,y,path:location.pathname,since:performance.now()};return false}return performance.now()-previous.since>=200?{x,y}:false})()`);
     if (!point) return false;
     // Hover and recheck before pressing; never auto-scroll or click a stale carousel position.
     await ab('mouse', 'move', String(point.x), String(point.y));
@@ -227,11 +217,11 @@ async function run(route, blocked, keyboard = false) {
   await until(() => evaluate(`location.pathname===${JSON.stringify(destination)}`), 'native viewer URL');
   await until(viewerReady, 'selected image decoded in native viewer without second load click');
   assert.equal(await evaluate('performance.timeOrigin'), timeOrigin, 'viewer is a native SPA transition');
-  const visible = await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1&&s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none'});if(!s)return false;const r=s.getBoundingClientRect();return {width:r.width,height:r.height,visible:getComputedStyle(s).visibility==='visible',close:!!document.querySelector('[role="dialog"] button[aria-label="Close"]')}})()`), 'decoded native viewer snapshot after rerender');
+  const visible = await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-viewer xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1&&s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none'});if(!s)return false;const r=s.getBoundingClientRect();return {width:r.width,height:r.height,visible:getComputedStyle(s).visibility==='visible',close:!!document.querySelector('[role="dialog"] button[aria-label="Close"]')}})()`), 'decoded native viewer snapshot after rerender');
   assert.ok(visible.visible && visible.width > 500 && visible.close);
   if (blocked) {
     assert.equal(await evaluate(`[...document.querySelectorAll('#xmf-viewer-duplicate xmf-slot')].some(s=>s.shadowRoot.querySelector('iframe'))`), false, 'duplicate occurrence stays blocked');
-    assert.equal(await until(() => evaluate(`[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')).length`), 'viewer renderer after native rerender'), 1, 'offscreen slides stay blocked');
+    assert.equal(await until(() => evaluate(`[...document.querySelectorAll('xmf-viewer xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')).length`), 'viewer renderer after native rerender'), 1, 'offscreen slides stay blocked');
   }
   const requests = capture.since(start), success = requests.filter(r => r.status >= 200 && r.status < 300);
   assert.ok(success.length > 0);
@@ -250,12 +240,13 @@ async function run(route, blocked, keyboard = false) {
   console.log('PASS', report.results.at(-1).name);
   return new Set(success.map(r => policy.assetKey(r.url)));
 }
+const expectedAlbumAssets = new Map();
 async function directAlbum(reload) {
   const firstPhoto = reload ? 2 : 1;
   const start = capture.mark();
   await ab(reload ? 'reload' : 'open', ...(!reload ? [album + '/photo/1'] : []));
   await until(() => evaluate(`location.pathname===${JSON.stringify(new URL(album).pathname + '/photo/' + firstPhoto)}`), 'direct viewer photo ' + firstPhoto);
-  await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1&&s.dataset.ready==='true'});if(!s)return false;s.id='xmf-viewer-selected';return !!s.shadowRoot.querySelector('button')})()`), 'direct album visible placeholder');
+  await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-viewer xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1&&s.dataset.ready==='true'});if(!s)return false;s.id='xmf-viewer-selected';return !!s.shadowRoot.querySelector('button')})()`), 'direct album visible placeholder');
   assert.ok(await noFrames(), 'all-ON direct album startup stays blocked');
   await until(() => {
     const images = capture.since(start).filter(imageRequest);
@@ -273,6 +264,7 @@ async function directAlbum(reload) {
     await until(() => evaluate(`location.pathname.endsWith('/photo/${photo}')`), 'direct viewer selected photo ' + photo);
     await until(viewerReady, 'direct viewer group remains authorized');
     const selection = await selectionWindow(before, photo);
+    if (expectedAlbumAssets.has(photo)) assert.equal(selection.selected, expectedAlbumAssets.get(photo), 'route ordinal matches the decoded inline attachment');
     assert.ok(selections.every(previous => previous.selected !== selection.selected), 'Next selects a different image asset');
     selections.push(selection);
   }
@@ -286,7 +278,7 @@ async function singlePhoto() {
   for (const reload of [false, true]) {
     const start = capture.mark();
     await ab(reload ? 'reload' : 'open', ...(!reload ? [single + '/photo/1'] : []));
-    await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('[data-testid="swipe-to-dismiss"] xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1&&s.dataset.ready==='true'});if(!s)return false;s.id='xmf-viewer-selected';return !!s.shadowRoot.querySelector('button')})()`), 'single-photo visible placeholder');
+    await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-viewer xmf-slot')].find(s=>{const r=s.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1&&s.dataset.ready==='true'});if(!s)return false;s.id='xmf-viewer-selected';return !!s.shadowRoot.querySelector('button')})()`), 'single-photo visible placeholder');
     assert.ok(await noFrames(), 'direct single-photo startup is blocked');
     await until(() => {const r=capture.since(start);return r.length>0&&r.every(r=>r.error||r.finished);}, 'single-photo startup network outcomes');
     assert.ok(capture.since(start).every(r=>r.error==='net::ERR_BLOCKED_BY_CLIENT'), 'no successful pre-selection media');
@@ -335,17 +327,25 @@ try {
     await until(() => evaluate(`[...document.querySelectorAll('xmf-slot')].filter(s=>s.shadowRoot.querySelector('iframe')?.style.pointerEvents==='none').length===${albumImages}`), 'all decoded album images');
     const allowed = new Set(capture.since(start).filter(r => r.status >= 200 && r.status < 300).map(r => policy.assetKey(r.url)));
     assert.equal(allowed.size, albumImages);
+    for (let index = 1; index <= albumImages; index++) {
+      const selector = `a[href="${new URL(album).pathname}/photo/${index}"] xmf-slot`;
+      const expression = `document.querySelector(${JSON.stringify(selector)})?.shadowRoot.querySelector('iframe')`;
+      expectedAlbumAssets.set(index, await until(() => selectedViewerAsset(expression), 'decoded inline attachment ' + index));
+    }
     await pointerSelect();
     await until(viewerReady, 'album native viewer');
+    assert.equal(await selectedViewerAsset(), expectedAlbumAssets.get(1));
     for (let index = 2; index <= albumImages; index++) {
       await ab('press', 'ArrowRight');
       await until(() => evaluate(`location.pathname.endsWith('/photo/${index}')`), 'native next photo ' + index);
       await until(viewerReady, 'decoded gallery photo ' + index);
+      assert.equal(await selectedViewerAsset(), expectedAlbumAssets.get(index), 'Next displays the matching inline attachment');
     }
     for (let index = albumImages - 1; index >= 2; index--) {
       await ab('press', 'ArrowLeft');
       await until(() => evaluate(`location.pathname.endsWith('/photo/${index}')`), 'native previous photo ' + index);
       await until(viewerReady, 'previous photo decoded ' + index);
+      assert.equal(await selectedViewerAsset(), expectedAlbumAssets.get(index), 'Previous displays the matching inline attachment');
     }
     assert.ok(capture.since(start).filter(r => r.status >= 200 && r.status < 300).every(r => allowed.has(policy.assetKey(r.url)) && r.document?.startsWith('chrome-extension://')));
     await settings(false); await settings(true);

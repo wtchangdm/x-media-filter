@@ -1,6 +1,6 @@
-# Public release preparation — 0.1.2
+# Public release preparation — 0.1.3
 
-**0.1.2 update package prepared locally; not submitted or published by this work.** Public GitHub source hosting and the MIT license were explicitly requested; those are separate from store submission, developer-account registration, payments and store publication. This update includes the asset-identity photo-viewer and placeholder-input fixes plus development-test reliability improvements. Permissions and saved settings are unchanged. The final manifest-only bump follows the verified runtime changes; see [current validation](../validation.md#asset-identity-viewer-and-timeout-fixes).
+**Version 0.1.3 is prepared for upload, not submitted or published.** It includes the route-owned photo-viewer fix. See [coverage and remaining limits](../validation.md).
 
 ## Confirmed decisions
 
@@ -13,13 +13,13 @@
 - **Publisher name/date:** `wtchangdm` (GitHub maintainer used as the initial public name), policy effective 2026-10-17. Confirm the actual store publisher name before submission. No separate policy website is required.
 - **Language:** English throughout project documentation and store materials.
 - **Artwork origin:** all supplied artwork was generated with ChatGPT, as confirmed by the user. This is recorded as the source, not treated as an unanswered provenance question.
-- **Image treatment:** crop/resize supplied images only. The previous custom text/layout compositions and Swift exporter have been removed. Keep the supplied originals untouched. A subsequent screenshot-only request centers the actual popup panel using its existing background pixels; the runtime popup layout remains unchanged.
+- **Image treatment:** crop/resize supplied artwork only; preserve captured UI and use its existing background pixels for screenshot margins. Keep source images unchanged.
 
 ## Reviewable deliverables
 
 | Item | Location |
 | --- | --- |
-| Runtime ZIP | `artifacts/release/x-media-filter-0.1.2.zip` |
+| Runtime ZIP | `artifacts/release/x-media-filter-0.1.3.zip` |
 | Checksums and per-file inventory | `artifacts/release/SHA256SUMS`, `package-report.json` |
 | Reproducible packager | [scripts/package.py](../../scripts/package.py), Python 3 standard library |
 | Listing | [listing.en.md](listing.en.md) |
@@ -116,9 +116,9 @@ The policy has no remaining placeholder values or unpublished-draft notice. It n
 
 Free pricing, all available regions, GitHub repository/policy hosting, MIT licensing and documentation/email support are **settled**, not questions to ask again. Only the store visibility needs confirmation if the user now prefers Unlisted over the previously selected Public.
 
-## Store requirements already checked
+## Store requirements
 
-Official sources were checked on **2026-10-17**; no authenticated dashboard state has been inspected.
+Recheck the official requirements and dashboard wording before submission.
 
 - Root-level manifest; description at most 132 characters; later uploaded updates need a higher version.
 - Required: 128×128 PNG icon, 440×280 small promo, and at least one screenshot (maximum five, 1280×800 or 640×400). A 1400×560 marquee is optional. The specific Images guide identifies these minimum assets; no promotional video is needed for this prepared minimum set.
@@ -128,15 +128,13 @@ Official sources were checked on **2026-10-17**; no authenticated dashboard stat
 
 ## Validation boundaries
 
-Latest viewer/video evidence uses **Chrome 156.0.8078.80**, not a real Chrome 128 run. Earlier artwork and broader acceptance evidence uses **Chrome 155.0.8059.85**. The popup capture was taken in the user's existing Chrome, in a named/pinned session, with all three saved filters ON and no setting changes. The new crops reuse that capture: no browser was launched for image revision. The screenshot centers the actual popup between equal strips of background from that same document, with no explanatory overlay or change to the runtime UI; all-ON is an example, not fresh-install defaults.
-
-The 195 current offline tests and measured browser/network evidence remain distinct from image/packaging checks. Full Chrome restart, actual redirect rejection, native mixed/GIF/quoted-video coverage and other documented cases remain gaps. The conditional BFCache dead-port hypothesis is unchanged and unverified under native BFCache; it is not reported as fixed or as an established severe release blocker.
+See [current coverage and remaining gaps](../validation.md). Chrome 128 is the minimum supported version, not a verified test environment. Image and packaging checks do not prove network blocking. The settings screenshot shows saved all-ON preferences, not fresh-install defaults.
 
 ## Submission sequence — not performed
 
 1. Complete developer-account setup and the remaining final approvals. GitHub source/policy publication is separate from Chrome Web Store publication and was authorized by the repository request.
-2. Verify the final ZIP hash, listing, images, public policy/support links and dashboard warnings.
-3. For an existing listing, upload `artifacts/release/x-media-filter-0.1.2.zip` as a new package version (use **Items → Add new item** only for a first listing) and fill Listing, Privacy, Distribution and Test instructions from the prepared docs. Use free/all available regions; confirm Public versus Unlisted before applying visibility. Both have the same review/policy requirements. Add the prepared icon/promo/screenshot, policy URL and SUPPORT.md URL; keep the built-in public support hub off if desired.
+2. Rebuild and verify the ZIP from the intended release source, then verify its hash, listing, images, public policy/support links and dashboard warnings.
+3. For an existing listing, upload `artifacts/release/x-media-filter-0.1.3.zip` as a new package version (use **Items → Add new item** only for a first listing) and fill Listing, Privacy, Distribution and Test instructions from the prepared docs. Use free/all available regions; confirm Public versus Unlisted before applying visibility. Both have the same review/policy requirements. Add the prepared icon/promo/screenshot, policy URL and SUPPORT.md URL; keep the built-in public support hub off if desired.
 4. Obtain explicit **Submit for Review** authorization. Use deferred publishing rather than automatic publication.
 5. Obtain explicit publication authorization after approval. A store-assigned extension ID differs from the unpacked ID; runtime code uses `chrome.runtime.id/getURL`, not the development ID. Preferences do not automatically migrate between the two installations.
 
