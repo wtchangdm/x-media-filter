@@ -280,6 +280,100 @@ test("native player recognition rejects unrelated links, fields, media and non-d
   assert.equal(adapter.scan(article, posts(post("1", [entry])))[0].element, player);
 });
 
+const attributedPlayer = () => {
+  const poster = "https://pbs.twimg.com/amplify_video_thumb/88/img/cover?format=webp&name=medium";
+  const entry = { poster: "https://pbs.twimg.com/amplify_video_thumb/88/img/cover.jpg",
+    type: "video", mediaId: "88", video: "https://video.twimg.com/amplify_video/88/vid/movie.mp4" };
+  const credit = permalink("2", "creator");
+  const controls = el("div", {}, el("button", {}, "Play"), el("img", { src: poster }), credit);
+  const player = el("div", {}, el("video", { poster, src: "blob:https://x.com/opaque" }), controls);
+  const article = el("article", {}, permalink("1"), player);
+  return { article, player, controls, credit, entry };
+};
+
+test("metadata-proven player attribution does not compete with the enclosing permalink", () => {
+  for (const representation of ["both", "video", "image"]) {
+    const { article, player, controls, entry } = attributedPlayer();
+    if (representation === "video") controls.children.splice(1, 1);
+    if (representation === "image") delete player.children[0].attrs.poster;
+    const body = el("div", {}, "Unrelated post text");
+    const related = el("a", { href: "https://example.com/story" }, "Story");
+    article.append(body);
+    article.append(related);
+    const map = posts(post("1", [entry]));
+    assert.equal(adapter.owner(article, map), "1");
+    const found = adapter.scan(article, map);
+    assert.equal(found.length, 1);
+    assert.equal(found[0].element, player);
+    assert.equal(found[0].postId, "1");
+    assert.equal(found[0].attachmentPost, "1");
+    assert.equal(found[0].video, entry.video);
+    assert.ok(!found[0].element.contains(body) && !found[0].element.contains(related));
+    player.append(el("xmf-slot", {}));
+    assert.equal(adapter.scan(article, map)[0].element, player, "mounted placeholder must not invalidate the shell");
+  }
+});
+
+test("player credits allow profile avatars, but never unrelated images or media", () => {
+  for (const src of ["https://pbs.twimg.com/profile_images/123/avatar.jpg",
+    "https://pbs.twimg.com/media/other.jpg", "https://evil.example/profile_images/123/avatar.jpg"]) {
+    const { article, player, credit, entry } = attributedPlayer();
+    credit.append(el("img", { src }));
+    player.children[1].append(el("div", {}, el("img", { src })));
+    const found = adapter.scan(article, posts(post("1", [entry])));
+    assert.equal(found.some((result) => result.element === player && result.postId === "1"),
+      src === "https://pbs.twimg.com/profile_images/123/avatar.jpg");
+  }
+});
+
+test("attribution exclusion requires unique matching metadata and preserves outside ambiguity", () => {
+  for (const metadata of [[], [post("1")], [post("1", [media("other")])],
+    [post("1", [attributedPlayer().entry, attributedPlayer().entry])],
+    [post("1", [attributedPlayer().entry]), post("2", [attributedPlayer().entry])]]) {
+    const { article } = attributedPlayer();
+    assert.equal(adapter.owner(article, posts(...metadata)), null);
+    assert.ok(adapter.scan(article, posts(...metadata)).every((result) => result.postId === null));
+  }
+  const { article, entry } = attributedPlayer();
+  article.append(permalink("3"));
+  assert.equal(adapter.owner(article, posts(post("1", [entry]))), null);
+  assert.ok(adapter.scan(article, posts(post("1", [entry]))).every((result) => result.postId === null));
+});
+
+test("player credits cannot admit unrelated links, mismatched posters or invalid MP4 bindings", () => {
+  const mutations = [
+    ({ credit }) => { credit.attrs.href = "https://example.com/creator/status/2"; },
+    ({ credit }) => { credit.attrs.href = "/creator"; },
+    ({ credit }) => { credit.attrs.href = "/creator/status/2/video/1"; },
+    ({ controls }) => controls.append(permalink("3")),
+    ({ player }) => player.append(permalink("3")),
+    ({ controls, player, credit }) => { controls.children.pop(); player.append(credit); },
+    ({ controls }) => { controls.children.shift(); },
+    ({ player }) => { player.children[0].attrs.poster = imageURL("other"); },
+    ({ controls }) => { controls.children[1].attrs.src = imageURL("other"); },
+    ({ entry }) => { entry.poster = imageURL("other"); },
+    ({ entry }) => { entry.video = "https://video.twimg.com/amplify_video/99/vid/movie.mp4"; },
+    ({ entry }) => { entry.video = "blob:https://x.com/opaque"; },
+  ];
+  for (const mutate of mutations) {
+    const fixture = attributedPlayer();
+    mutate(fixture);
+    const found = adapter.scan(fixture.article, posts(post("1", [fixture.entry])));
+    assert.ok(found.every((result) => result.element !== fixture.player), "unsafe shell is never replaced");
+  }
+});
+
+test("attributed players preserve nested quote ownership", () => {
+  const { article: quoted, entry, player } = attributedPlayer();
+  const article = el("article", {}, permalink("3"), quoted);
+  const map = posts(post("3", [], { quote: "1" }), post("1", [entry]));
+  assert.equal(adapter.owner(article, map), "3");
+  const [found] = adapter.scan(article, map);
+  assert.equal(found.element, player);
+  assert.equal(found.postId, "3");
+  assert.equal(found.attachmentPost, "1");
+});
+
 test("native players preserve quote ownership and unknown-owner guarantees", () => {
   const entry = media("custom", { type: "video" });
   for (const container of ["blockquote", "article", "role-link"]) {

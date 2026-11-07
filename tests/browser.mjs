@@ -16,6 +16,7 @@ const fixtures = {
   album: 'https://x.com/Cloudflare/status/2111522160153882734',
   customVideo: 'https://x.com/github/status/2111225205309780009',
   encodedVideo: 'https://x.com/thsottiaux/status/2111249534072529256',
+  attributedVideo: 'https://x.com/ctatedev/status/2118853661040295997',
 };
 const allOn = {a: true, c: true, b: true};
 const report = {mode, results: [], gaps: ['All eight settings on live surfaces', 'Quote/mixed/GIF fixtures',
@@ -176,7 +177,10 @@ try {
   mark = await navigate('album'); const albumId = policy.statusId(fixtures.album);
   const count = 4;
   await until(async () => (await slots()).filter(s => s.post === albumId).length === count, 'four album placeholders');
-  const albumKeys = (await evaluate(`(()=>{const slots=[...document.querySelectorAll('xmf-slot')].filter(s=>s.dataset.post===${JSON.stringify(albumId)});return slots.sort((a,b)=>Number(a.dataset.index)-Number(b.dataset.index)).map(s=>s.parentElement.querySelector('img')?.getAttribute('src'))})()`)).map(policy.assetKey);
+  const albumKeys = await until(async () => {
+    const keys = (await evaluate(`(()=>{const slots=[...document.querySelectorAll('xmf-slot')].filter(s=>s.dataset.post===${JSON.stringify(albumId)});return slots.sort((a,b)=>Number(a.dataset.index)-Number(b.dataset.index)).map(s=>s.parentElement.querySelector('img')?.getAttribute('src'))})()`)).map(policy.assetKey);
+    return keys.length === count && keys.every(Boolean) && keys;
+  }, 'current album attachment sources');
   assert.equal(new Set(albumKeys).size, count, 'distinct canonical album attachments');
   await evidence('album startup', mark, 0); await clickSlot(albumId); await imageCount(count);
   await evidence('album grouped still-image authorization', mark, count);
@@ -211,13 +215,15 @@ try {
   await until(async () => (await slots()).some(s => s.post === reply && s.category === 'A'), 'new route focus');
   await evidence('status SPA focus and revoked grants', mark, 0);
 
-  for (const alias of ['customVideo', 'encodedVideo']) {
+  for (const alias of ['attributedVideo', 'customVideo', 'encodedVideo']) {
     mark = await navigate(alias); const post = policy.statusId(fixtures[alias]);
     await duplicate(post); await evidence(alias + ' startup poster/playlist barrier', mark, 0);
     await clickSlot(post);
     await until(async () => (await capture.player()).some(p => p.kind === 'video' && p.ready >= 1), alias + ' metadata');
     await capture.player('play'); await until(async () => (await capture.player()).some(p => p.time > 1 && !p.paused), alias + ' playback');
-    await capture.player('seek'); await until(async () => (await capture.player()).some(p => p.time >= 39 && p.ready >= 2), alias + ' seek');
+    await capture.player('seek');
+    await until(async () => (await capture.player()).some(p =>
+      p.time >= Math.min(40, p.duration / 2) - 0.5 && p.ready >= 2), alias + ' seek');
     assert.ok((await slots()).filter(s => s.duplicate).every(s => !s.loaded));
     await evidence(alias + ' MP4 playback/seek and duplicate isolation', mark, 1);
     await settings({a: false, c: true, b: true}); await settings(allOn); await blocked();

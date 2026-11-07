@@ -38,13 +38,31 @@ var XMFAdapter = (function () {
 
   function owner(article, posts) {
     if (article?.tagName !== "ARTICLE") return null;
-    const candidates = new Set();
-    for (const anchor of article.querySelectorAll("a[href]")) {
+    const anchors = [...article.querySelectorAll("a[href]")].filter((anchor) => {
       const status = link(anchor);
-      if (!status || status.ordinal !== null || quoteBoundary(anchor, article) ||
-          anchor.querySelector("img, video")) continue;
-      candidates.add(status.id);
+      return status && status.ordinal === null && !quoteBoundary(anchor, article) &&
+        !anchor.querySelector("img, video");
+    });
+    const attributions = new Set();
+    for (const video of article.querySelectorAll("video")) {
+      if (quoteBoundary(video, article)) continue;
+      const shell = video.parentElement;
+      const links = [...shell.querySelectorAll("a")];
+      if (links.length !== 1) continue;
+      const item = nativeMedia(video)?.poster ? nativeMedia(video) :
+        nativeMedia(shell.querySelector("img"));
+      if (!item?.poster) continue;
+      // Attribution is structural, but only a unique metadata owner may prove it.
+      const matches = [...new Set(anchors.map((anchor) => link(anchor).id))].flatMap((id) => {
+        const entries = (record(posts, id)?.media || []).filter((entry) => policy.sameAsset(entry?.poster, item.poster));
+        return entries.map((entry) => ({ id, entry }));
+      });
+      if (matches.length !== 1) continue;
+      const { id, entry } = matches[0];
+      if (anchors.some((anchor) => !shell.contains(anchor) && link(anchor).id === id) &&
+          nativePlayer(video, item, article, entry) === shell) attributions.add(links[0]);
     }
+    const candidates = new Set(anchors.filter((anchor) => !attributions.has(anchor)).map((anchor) => link(anchor).id));
     const quoted = new Set();
     for (const id of candidates) {
       const quote = record(posts, id)?.quote;
@@ -59,6 +77,7 @@ var XMFAdapter = (function () {
   }
 
   function nativeMedia(node) {
+    if (!node) return null;
     if (node.tagName === "IMG") {
       let poster = source(node, "src", "image");
       if (!poster) {
@@ -96,17 +115,45 @@ var XMFAdapter = (function () {
     return true;
   }
 
+  function creditAvatar(image) {
+    try {
+      const url = new URL(image.getAttribute("src"));
+      return url.origin === "https://pbs.twimg.com" && !url.username && !url.password &&
+        /^\/profile_images\/\d+\/[^/]+$/.test(url.pathname);
+    } catch { return false; }
+  }
+
   function nativePlayer(node, item, article, entry) {
-    if (node.tagName !== "IMG" || !article || !["video", "animated_gif"].includes(entry?.type)) return null;
+    if (!["IMG", "VIDEO"].includes(node.tagName) || !article || !["video", "animated_gif"].includes(entry?.type)) return null;
     for (let parent = node.parentElement; parent && parent !== article; parent = parent.parentElement) {
       if (isQuoteBoundary(parent)) break;
       if (![...parent.children].some((child) => child.tagName === "VIDEO")) continue;
       // The nearest direct-video boundary owns the controls, not the surrounding post.
       if (!["DIV", "SPAN", "FIGURE"].includes(parent.tagName) ||
-          parent.querySelector("a, article, blockquote, form, input, textarea, select")) return null;
+          parent.querySelector("article, blockquote, form, input, textarea, select")) return null;
+      const anchors = [...parent.querySelectorAll("a")];
+      let credit = null;
+      if (anchors.length) {
+        const anchor = anchors[0];
+        const status = link(anchor);
+        const children = [...parent.children].filter((child) => child.tagName !== "XMF-SLOT");
+        const controls = children.find((child) => child.tagName !== "VIDEO");
+        // Only one base-status credit inside the sibling controls is attributable.
+        // Links beside the player, media links and arbitrary navigation stay outside.
+        if (anchors.length !== 1 || !status || status.ordinal !== null ||
+            children.length !== 2 || !controls ||
+            !["DIV", "SPAN", "FIGURE"].includes(controls.tagName) ||
+            !controls.contains(anchor) || !controls.querySelector("button") ||
+            anchor.querySelector("video") || [...anchor.querySelectorAll("img")].some((image) => !creditAvatar(image)) ||
+            quoteBoundary(anchor, parent) ||
+            !policy.sameAsset(entry.poster, item.poster) ||
+            !policy.videoMatchesPoster(item.poster, policy.mediaURL(entry.video, "video"), entry.mediaId)) return null;
+        credit = anchor;
+      }
       const videos = [...parent.querySelectorAll("video")];
+      const avatars = new Set(credit ? [...credit.querySelectorAll("img")].map((image) => image.getAttribute("src")) : []);
       if (videos.length !== 1 || [...parent.querySelectorAll("img")].some((image) =>
-        !policy.sameAsset(nativeMedia(image)?.poster, item.poster))) return null;
+        !avatars.has(image.getAttribute("src")) && !policy.sameAsset(nativeMedia(image)?.poster, item.poster))) return null;
       const native = nativeMedia(videos[0]);
       if ((native?.poster && !policy.sameAsset(native.poster, item.poster)) ||
           (native?.video && !policy.videoMatchesPoster(item.poster, native.video, entry.mediaId))) return null;

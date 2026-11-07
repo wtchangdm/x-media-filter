@@ -98,7 +98,7 @@ export class MediaCapture {
     const expressions = {
       state: '({kind:document.querySelector("video")?"video":"image",ready:document.querySelector("video")?.readyState,time:document.querySelector("video")?.currentTime,paused:document.querySelector("video")?.paused,duration:document.querySelector("video")?.duration,width:document.querySelector("img")?.naturalWidth,error:document.getElementById("status")?.hidden?null:document.getElementById("status")?.textContent})',
       play: '(async()=>{const v=document.querySelector("video");v.muted=true;await v.play();return true})()',
-      seek: 'document.querySelector("video").currentTime=40',
+      seek: '(()=>{const v=document.querySelector("video");v.currentTime=Math.min(40,v.duration/2)})()',
       pause: 'document.querySelector("video")?.pause()',
     };
     if (!expressions[action]) throw new Error('Unsupported player inspection');
