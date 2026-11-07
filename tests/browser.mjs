@@ -1,228 +1,243 @@
-// Real, existing Chrome only. UI actions use agent-browser; CDP observes network/player state.
+// Current-X regression: trusted agent-browser input and scoped Chrome network evidence.
+// No page text, API bodies, headers or browser-control URLs are written to reports.
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {writeFile} from 'node:fs/promises';
+import {readFile, writeFile} from 'node:fs/promises';
 import {MediaCapture} from './media-capture.mjs';
 import policy from '../extension/policy.js';
 const exec = promisify(execFile);
-const [ws, target, session = 'xmf-user', output = '/tmp/xmf-validation.json', mode = 'cold'] = process.argv.slice(2);
-if (!ws || !target) throw new Error('Usage: node tests/browser.mjs <existing-browser-ws> <agent-owned-target-id> [session] [output.json] [cold|normal]');
-const id = process.env.XMF_EXTENSION_ID || 'pmkikmmocmppigkinihgchopoonpoldi';
-const image = 'https://x.com/ArtificialAnlys/status/2110893784422908225';
-const video = 'https://x.com/thsottiaux/status/2111249534072529256';
-const customCoverVideo = 'https://x.com/github/status/2111225205309780009';
-const quote = 'https://x.com/thsottiaux/status/2111245052513259606';
-const report = {version: '0.1.3', mode, results: [], gaps: ['Browser restart', 'Additional surfaces and media families', 'Adaptive HLS/quality switching: uses native progressive MP4 instead']};
+const [ws, target, session, output = '/tmp/xmf-validation.json', mode = 'cold'] = process.argv.slice(2);
+const id = process.env.XMF_EXTENSION_ID;
+assert.ok(ws && target && session && /^[a-p]{32}$/.test(id || '') && ['cold', 'normal'].includes(mode),
+  'Usage: XMF_EXTENSION_ID=<id> node tests/browser.mjs <browser-ws> <owned-target> <attached-session> [report.json] [cold|normal]');
+const fixtures = {
+  thread: 'https://x.com/ArtificialAnlys/status/2110893784422908225',
+  album: 'https://x.com/Cloudflare/status/2111522160153882734',
+  customVideo: 'https://x.com/github/status/2111225205309780009',
+  encodedVideo: 'https://x.com/thsottiaux/status/2111249534072529256',
+};
+const allOn = {a: true, c: true, b: true};
+const report = {mode, results: [], gaps: ['All eight settings on live surfaces', 'Quote/mixed/GIF fixtures',
+  'Home/search/profile/account-dependent surfaces', 'Cross-tab and worker/browser restart',
+  'Native BFCache', 'Adaptive HLS playback (fixed MP4 only)']};
 const capture = new MediaCapture(ws, target, mode === 'cold');
-let popup, original, secondary;
+let popup, popupSession, original;
 async function ab(...args) {
-  const result = await exec('agent-browser', ['--session', session, '--auto-connect', '--pin-tab', ...args], {timeout: 40000, maxBuffer: 1024 * 1024});
-  return result.stdout.trim();
+  try { return (await exec('agent-browser', ['--session', session, '--cdp', ws, '--pin-tab', ...args],
+    {timeout: 40000, maxBuffer: 1024 * 1024})).stdout.trim(); }
+  catch (error) {
+    const kind = String(error.stderr || '').match(/covered|not found|strict mode|timeout|detached/i)?.[0] || 'command error';
+    throw new Error(`agent-browser ${args[0]} failed: ${kind} (arguments redacted)`);
+  }
 }
-async function evaluate(code) {
-  const result = await exec('agent-browser', ['--session', session, '--auto-connect', '--pin-tab', 'eval', '-b', Buffer.from(code).toString('base64')], {timeout: 30000});
-  return JSON.parse(result.stdout);
+async function evaluate(expression, sessionId = capture.root) {
+  const reply = await capture.cdp.call('Runtime.evaluate', {expression, returnByValue: true, awaitPromise: true}, sessionId);
+  assert.ok(!reply.exceptionDetails, 'browser evaluation failed'); return reply.result.value;
 }
-async function until(fn, name) {
-  const end = Date.now() + 30000;
+async function until(check, name) {
+  const end = Date.now() + 25000;
   while (Date.now() < end) {
-    const value = await fn(); if (value) return value;
-    await new Promise(resolve => setTimeout(resolve, 300));
+    try { const value = await check(); if (value) return value; }
+    catch (error) { if (!/Cannot find context with specified id|Execution context was destroyed/.test(String(error))) throw error; }
+    await new Promise(r => setTimeout(r, 200));
   }
   throw new Error('Timed out: ' + name);
 }
-const state = () => evaluate(`[...document.querySelectorAll('xmf-slot')].map(s=>({category:s.dataset.category,ready:s.dataset.ready==='true',loaded:!!s.shadowRoot?.querySelector('iframe'),pending:!!s.shadowRoot?.querySelector('button')?.disabled,duplicate:!!s.closest('#xmf-duplicate-fixture')}))`);
-async function navigate(url) {
-  await ab('open', url); await ab('tab', target);
-  await until(async () => (await state()).some(s => s.ready), 'media discovery');
+async function settings(value) {
+  await evaluate(`chrome.storage.local.set({filters:${JSON.stringify(value)}})`, popupSession);
+  await until(async () => {
+    const saved = await evaluate('chrome.storage.local.get("filters").then(r=>r.filters)', popupSession);
+    return ['a', 'c', 'b'].every(key => saved[key] === value[key]);
+  }, 'saved settings');
 }
-async function evidence(name, mark, expectedAssets = 0) {
-  if (expectedAssets === null) await until(() => capture.since(mark).some(r => r.status >= 200 && r.status < 300), name + ': automatic media response');
-  await until(()=>capture.since(mark).filter(r=>!r.document?.startsWith('chrome-extension://')).every(r=>r.error||r.finished), name + ': media outcomes');
-  const reqs = capture.since(mark);
-  const success = reqs.filter(r => r.status >= 200 && r.status < 300);
+const slots = () => evaluate(`[...document.querySelectorAll('xmf-slot')].map(s=>({post:s.dataset.post,index:s.dataset.index,
+  category:s.dataset.category,ready:s.dataset.ready==='true',loaded:!!s.shadowRoot.querySelector('iframe'),
+  pending:!!s.shadowRoot.querySelector('button')?.disabled,duplicate:!!s.closest('#xmf-test-duplicate'),
+  visible:(()=>{const r=s.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(s).visibility==='visible'})()}))`);
+const gallery = () => evaluate('!!document.querySelector("xmf-gallery")');
+async function navigate(alias, suffix = '') {
+  const mark = capture.mark(); await ab('open', fixtures[alias] + suffix);
+  await until(async () => await evaluate('location.href') === fixtures[alias] + suffix, alias + ' route');
+  const controlled = await evaluate('!!navigator.serviceWorker.controller');
+  report.siteWorkerControlled ||= controlled;
+  assert.ok(mode === 'cold' || !controlled || capture.siteWorkerTargets > 0, 'site-worker-controlled delivery needs an observed worker');
+  if (suffix) await until(gallery, 'owned gallery');
+  else await until(async () => (await slots()).some(s => s.post === policy.statusId(fixtures[alias]) && s.ready && s.visible), alias + ' visible ready placeholder');
+  return mark;
+}
+async function evidence(name, mark, expectedAssets, expectedKeys = null) {
+  await until(() => capture.since(mark).filter(r => !r.document?.startsWith('chrome-extension://')).every(r => r.error || r.finished), name + ' page request outcomes');
+  const requests = capture.since(mark), success = requests.filter(r => r.status >= 200 && r.status < 300);
   const assets = new Set(success.map(r => policy.assetKey(r.url)));
-  if (expectedAssets === null) assert.ok(assets.size > 0, name + ': automatic media did not load');
-  else assert.equal(assets.size, expectedAssets, name + ': unexpected successful media');
-  assert.ok(success.every(r => r.document?.startsWith('chrome-extension://')), name + ': page-origin payload escaped');
-  assert.ok(success.every(r => r.credentialHeaders !== true), name + ': credential header on CDN request');
-  const page = reqs.filter(r => !r.document?.startsWith('chrome-extension://'));
-  const unexpected = page.filter(r=>r.error!=='net::ERR_BLOCKED_BY_CLIENT').map(r=>({type:r.type,status:r.status,error:r.error,finished:r.finished}));
-  assert.equal(unexpected.length, 0, name + ': unexpected page outcome ' + JSON.stringify(unexpected));
-  report.results.push({name, requests: reqs.length, pageBlocked: page.length, authorizedAssets: assets.size, authorizedURLVariants: new Set(success.map(r=>r.url)).size,
-    statuses: [...new Set(success.map(r => r.status))], credentialChecks: success.filter(r=>r.credentialHeaders!==undefined).length, bytes: success.reduce((sum, r) => sum + r.bytes + (r.finished ? 0 : r.received), 0)});
+  assert.equal(assets.size, expectedAssets, name + ': authorized asset count');
+  if (expectedKeys) assert.ok(expectedKeys.length === assets.size && expectedKeys.every(key => assets.has(key)), name + ': selected canonical asset');
+  assert.ok(success.every(r => r.document?.startsWith(`chrome-extension://${id}/`)), name + ': page-origin media response');
+  assert.ok(success.every(r => r.credentialHeaders !== true), name + ': credential-bearing media request');
+  const page = requests.filter(r => !r.document?.startsWith('chrome-extension://'));
+  assert.ok(page.every(r => r.error === 'net::ERR_BLOCKED_BY_CLIENT'), name + ': page request not canceled by barrier');
+  assert.equal(capture.failures.length, 0, 'capture setup failure');
+  const blockedFamilies = {};
+  for (const request of page) {
+    const url = new URL(request.url);
+    const family = url.hostname === 'pbs.twimg.com' ? 'image/poster'
+      : url.pathname.endsWith('.m3u8') ? 'playlist' : url.pathname.endsWith('.m4s') ? 'segment'
+        : url.pathname.endsWith('.mp4') ? 'MP4/init' : 'other video';
+    blockedFamilies[family] = (blockedFamilies[family] || 0) + 1;
+  }
+  report.results.push({name, requests: requests.length, pageBlocked: page.length, blockedFamilies, authorizedAssets: assets.size,
+    statuses: [...new Set(success.map(r => r.status))], credentialChecks: success.filter(r => r.credentialHeaders !== undefined).length});
   console.log('PASS', name);
 }
-async function settings(a, c, b) {
-  await ab('tab', popup);
-  for (const [name, value] of [['a', a], ['c', c], ['b', b]]) {
-    await until(() => evaluate(`!document.getElementById('${name}').disabled`), 'popup ready');
-    await ab(value ? 'check' : 'uncheck', '#' + name);
-  }
-  await until(() => evaluate(`['a','c','b'].every(name=>!document.getElementById(name).disabled)`), 'settings saved');
-  await ab('tab', target);
+async function clickSlot(post, index = '0') {
+  await evaluate('document.getElementById("xmf-test-selected")?.removeAttribute("id")');
+  let stableSince = Date.now();
+  await until(async () => {
+    const stable = await evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.post===${JSON.stringify(post)}&&s.dataset.index===${JSON.stringify(index)}&&!s.closest('#xmf-test-duplicate'));if(!s)return false;const same=s.id==='xmf-test-selected';s.id='xmf-test-selected';s.scrollIntoView({block:'center',behavior:'instant'});return same})()`);
+    if (!stable) stableSince = Date.now();
+    return stable && Date.now() - stableSince >= 1000;
+  }, 'stable selected occurrence');
+  await ab('click', '#xmf-test-selected');
 }
-async function clickFirst() {
-  await evaluate(`(async()=>{const id=location.pathname.match(/\\/status\\/(\\d+)/)[1];const s=[...document.querySelectorAll('xmf-slot')].find(s=>[...(s.closest('article')?.querySelectorAll('time')||[])].some(t=>t.closest('a')?.pathname.includes('/status/'+id)))||document.querySelector('xmf-slot');s.id='xmf-selected-fixture';await s.scrollIntoView({block:'center',behavior:'instant'});return true})()`);
-  const snapshot = await ab('snapshot', '-i', '-s', '#xmf-selected-fixture');
-  const ref = snapshot.match(/button .*\[ref=(e\d+)\]/)?.[1];
-  assert.ok(ref, 'placeholder must be accessible'); await ab('click', '@' + ref);
+// Closed shadow DOM remains accessible. Resolve only the named extension control, not page text.
+async function control(name, click = true) {
+  const {result: host} = await capture.cdp.call('Runtime.evaluate', {expression: 'document.querySelector("xmf-gallery")'}, capture.root);
+  if (!host.objectId) return false;
+  let nodes;
+  try {
+    const {node: element} = await capture.cdp.call('DOM.describeNode', {objectId: host.objectId, depth: 2, pierce: true}, capture.root);
+    const dialog = element.shadowRoots?.[0]?.children?.find(node => node.nodeName === 'DIALOG');
+    if (!dialog) return false;
+    ({nodes} = await capture.cdp.call('Accessibility.queryAXTree', {backendNodeId: dialog.backendNodeId, accessibleName: name, role: 'button'}, capture.root));
+  } finally { await capture.cdp.call('Runtime.releaseObject', {objectId: host.objectId}, capture.root); }
+  const node = nodes.find(n => !n.ignored && n.role?.value === 'button' && n.name?.value === name);
+  if (!node) return false;
+  const {object} = await capture.cdp.call('DOM.resolveNode', {backendNodeId: node.backendDOMNodeId}, capture.root);
+  try {
+    const {result} = await capture.cdp.call('Runtime.callFunctionOn', {objectId: object.objectId, returnByValue: true,
+      functionDeclaration: 'function(){const r=this.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,visible:r.width>0&&r.height>0,focused:this.getRootNode().activeElement===this}}'}, capture.root);
+    if (!click) return result.value;
+    assert.ok(result.value.visible, 'visible accessible control');
+    await ab('mouse', 'move', String(Math.round(result.value.x)), String(Math.round(result.value.y)));
+    await ab('batch', 'mouse down', 'mouse up'); return true;
+  } finally {
+    try { await capture.cdp.call('Runtime.releaseObject', {objectId: object.objectId}, capture.root); }
+    catch (error) { if (!/Cannot find context|Could not find object|Execution context was destroyed/.test(String(error))) throw error; }
+  }
+}
+async function imageCount(count) { return until(async () => (await capture.player()).filter(p => p.width > 0).length === count, 'decoded image count ' + count); }
+async function blocked() { return until(async () => (await capture.player()).length === 0 && (await slots()).every(s => !s.loaded && !s.pending), 'revoked renderers'); }
+async function duplicate(post) {
+  await until(() => evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.post===${JSON.stringify(post)});const a=s?.closest('article');if(!a)return false;const copy=a.cloneNode(true);copy.id='xmf-test-duplicate';copy.querySelectorAll('xmf-slot').forEach(n=>n.remove());copy.querySelectorAll('[data-xmf-covered]').forEach(n=>n.removeAttribute('data-xmf-covered'));document.body.append(copy);return true})()`), 'current duplicate source');
+  await until(async () => (await slots()).some(s => s.duplicate), 'duplicate occurrence');
 }
 try {
+  await capture.start(); report.browser = capture.version; report.siteWorkerTargets = capture.siteWorkerTargets;
+  // Refuse a missing/wrong target; never adopt a neighboring tab.
   await ab('tab', target);
-  await ab('tab', 'new', `chrome-extension://${id}/popup.html`);
-  const tabs = JSON.parse(await ab('tab', 'list', '--json')).data.tabs;
-  popup = tabs.find(t => t.active).targetId;
-  original = await evaluate('chrome.storage.local.get("filters").then(r=>XMFPolicy.normalizeSettings(r.filters))');
-  await settings(true, true, true);
-  await capture.start(); report.browser = capture.version; report.observedSiteWorkerTargets = capture.siteWorkerTargets;
-  let mark = capture.mark(); await navigate(image);
-  await ab('scroll', 'down', '2400');
-  await until(async () => { const slots = await state(); return ['A','C','B'].every(category => slots.some(s=>s.ready&&s.category===category)); }, 'focused post and both conversation authors discovered');
-  report.siteWorkerControlled = await evaluate('!!navigator.serviceWorker.controller');
-  assert.ok(!report.siteWorkerControlled || capture.siteWorkerTargets > 0, 'active site worker must be included in network observation');
-  await evaluate(`(()=>{document.querySelectorAll('xmf-slot').forEach(s=>s.shadowRoot.querySelector('button')?.click());return true})()`);
-  assert.ok((await state()).every(s=>!s.loaded&&!s.pending), 'page-synthesized clicks must not grant media');
-  report.results.push({name:'synthetic clicks rejected',passed:true});
-  await until(()=>evaluate(`(()=>{if(document.getElementById('xmf-other-fixture'))return true;const s=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.category==='B');const author=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.category==='C'&&s.dataset.ready==='true');const focused=[...document.querySelectorAll('article')].find(a=>[...a.querySelectorAll('time')].some(t=>t.closest('a')?.pathname==='/ArtificialAnlys/status/2110893784422908225'));if(!s||!author||!focused)return false;for(const [slot,id] of [[s,'xmf-other-fixture'],[author,'xmf-author-fixture']]){const copy=slot.closest('article').cloneNode(true);copy.id=id;copy.querySelectorAll('xmf-slot,[data-testid="tweetText"]').forEach(s=>s.remove());focused.before(copy)}focused.id='xmf-focus-fixture';return true})()`), 'fixture metadata');
-  await evidence(mode + ' images before click', mark);
-  await clickFirst();
-  await until(async () => (await capture.player()).some(p => p.width > 0), 'selected image pixels');
-  await evidence('single image click', mark, 1);
-  await ab('tab', 'new', 'about:blank');
-  secondary = JSON.parse(await ab('tab', 'list', '--json')).data.tabs.find(t=>t.active).targetId;
-  const attached = await capture.cdp.call('Target.attachToTarget', {targetId: secondary, flatten: true});
-  await capture.setup(attached.sessionId, 'secondary page');
-  await ab('open', image); await ab('tab', secondary);
-  await until(async()=> (await state()).some(s=>s.ready&&s.category==='A'), 'second tab placeholders');
-  assert.ok((await state()).every(s=>!s.loaded), 'manual grants must not cross tabs');
-  await evidence('second tab remains blocked', mark, 1);
-  await ab('tab', target);
-  await evaluate(`(()=>{const a=document.querySelector('#xmf-focus-fixture');const copy=a.cloneNode(true);copy.id='xmf-duplicate-fixture';copy.querySelectorAll('xmf-slot,[data-testid="tweetText"]').forEach(s=>s.remove());a.after(copy);return true})()`);
-  await until(async () => (await state()).some(s => s.duplicate), 'duplicate discovered');
-  assert.ok((await state()).filter(s => s.duplicate).every(s => !s.loaded), 'duplicate inherited grant');
-  const selectedURL = capture.since(mark).find(r => r.status === 200).url;
-  await evaluate(`(()=>{const s=document.querySelector('#xmf-other-fixture xmf-slot');const image=document.createElement('img');image.src=${JSON.stringify(selectedURL)};s.parentElement.append(image);return true})()`);
-  await until(async () => (await state()).some(s => s.category === 'B' && !s.loaded), 'cross-category duplicate blocked');
-  await evidence('duplicate occurrence isolation', mark, 1);
-  await evaluate(`(()=>{['xmf-duplicate-fixture','xmf-author-fixture','xmf-other-fixture'].forEach((id,index)=>{const a=document.getElementById(id);document.body.append(a);a.style.cssText='position:fixed;left:'+index*33+'%;bottom:10px;width:30%;max-height:300px;overflow:auto;z-index:9999;background:#15202b';a.querySelector('xmf-slot').scrollIntoView({block:'center',behavior:'instant'})});return true})()`);
-  let mixedMark = capture.mark();
-  await settings(false, true, true);
-  await evaluate(`(async()=>{const s=document.querySelector('#xmf-duplicate-fixture xmf-slot');s.id='xmf-auto-fixture';await s.scrollIntoView({block:'center',behavior:'instant'});return true})()`);
-  await until(()=>evaluate(`!!document.querySelector('#xmf-auto-fixture')?.shadowRoot.querySelector('iframe')`), 'A OFF eligible');
-  assert.ok((await state()).filter(s => s.category === 'B' || s.category === 'C').every(s => !s.loaded));
-  await evaluate(`(async()=>{const s=document.querySelector('#xmf-other-fixture xmf-slot');const id=s.closest('article').querySelector('time').closest('a').pathname.match(/\\/status\\/(\\d+)/)[1];const posts=[{id,author:'ArtificialAnlys',conversation:'0',media:[{poster:${JSON.stringify(selectedURL)},type:'photo',variants:[]}]}];window.postMessage({channel:'xmf-metadata-v1',posts},location.origin);const ch=new MessageChannel();window.postMessage({channel:'xmf-channel-v1'},location.origin,[ch.port2]);ch.port1.postMessage({posts});await new Promise(r=>setTimeout(r,50));ch.port1.close();return true})()`);
-  assert.equal(await evaluate(`(()=>{const s=document.querySelector('#xmf-other-fixture xmf-slot');return s.dataset.category==='B'&&!s.shadowRoot.querySelector('iframe')})()`), true, 'forged metadata must not change eligibility');
-  report.results.push({name:'forged window messages rejected',passed:true});
-  await ab('tab', secondary);
-  await evaluate(`(()=>{document.querySelector('xmf-slot').scrollIntoView({block:'center',behavior:'instant'});return true})()`);
-  await until(async()=> (await state()).some(s=>s.category==='A'&&s.loaded), 'settings reached second tab');
-  await ab('tab', target);
-  await evidence('A OFF / C ON / B ON', mixedMark, null);
-  mixedMark = capture.mark();
-  await settings(true, false, true);
-  await until(async () => (await state()).some(s => s.category === 'C' && s.loaded), 'C OFF eligible');
-  assert.ok((await state()).filter(s => s.category === 'A' || s.category === 'B').every(s => !s.loaded));
-  await evidence('A ON / C OFF / B ON', mixedMark, null);
-  mixedMark = capture.mark();
-  await settings(true, true, false);
-  await evaluate(`(()=>{[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.category==='B').scrollIntoView({block:'center'});return true})()`);
-  await until(async () => (await state()).some(s => s.category === 'B' && s.loaded), 'B OFF eligible');
-  assert.ok((await state()).filter(s => s.category === 'A' || s.category === 'C').every(s => !s.loaded));
-  await ab('tab', secondary);
-  await until(async()=> (await state()).filter(s=>s.category==='A').every(s=>!s.loaded), 'ON revoked second tab grants');
-  await ab('tab', target);
-  await evidence('A ON / C ON / B OFF', mixedMark, null);
-  report.results.push({name: 'settings propagate across tabs', passed: true});
-  await ab('tab', 'close', secondary); secondary = null; await ab('tab', target);
-  await settings(true, true, true);
-  await until(async () => (await state()).every(s => !s.loaded && !s.pending), 'all ON revokes grants');
-  const matrixMark = capture.mark();
-  // Visible copies retain each source post's metadata; they never bypass the page barrier.
-  for (const a of [true, false]) for (const c of [true, false]) for (const b of [true, false]) {
-    const filters = {a, c, b};
-    const name = `A ${a ? 'ON' : 'OFF'} / C ${c ? 'ON' : 'OFF'} / B ${b ? 'ON' : 'OFF'}`;
-    await settings(a, c, b);
-    await until(() => evaluate(`[['xmf-duplicate-fixture','A','a'],['xmf-author-fixture','C','c'],['xmf-other-fixture','B','b']].every(([id,category,key])=>{const s=document.querySelector('#'+id+' xmf-slot');return s?.dataset.category===category&&s.dataset.ready==='true'&&!s.shadowRoot.querySelector('button')?.disabled&&!!s.shadowRoot.querySelector('iframe')===!${JSON.stringify(filters)}[key]})`), name + ': independent eligibility');
-    const slots = await state();
-    assert.ok(slots.filter(s => policy.blocked(filters, s.category)).every(s => !s.loaded && !s.pending), name + ': filtered category loaded');
-    report.results.push({name: 'independent settings: ' + name, settings: filters, passed: true});
+  ({targetId: popup} = await capture.cdp.call('Target.createTarget', {url: `chrome-extension://${id}/popup.html`, background: true}));
+  ({sessionId: popupSession} = await capture.cdp.call('Target.attachToTarget', {targetId: popup, flatten: true}));
+  await until(() => evaluate('typeof chrome.storage?.local === "object"', popupSession), 'settings helper');
+  original = process.env.XMF_ORIGINAL_FILTERS_FILE
+    ? JSON.parse(await readFile(process.env.XMF_ORIGINAL_FILTERS_FILE, 'utf8')).filters
+    : await evaluate('chrome.storage.local.get("filters").then(r=>XMFPolicy.normalizeSettings(r.filters))', popupSession);
+  assert.ok(['a', 'c', 'b'].every(k => typeof original?.[k] === 'boolean'), 'original preferences must be recorded');
+  // Save before mutation for interruption recovery. Never overwrite a supplied original record.
+  if (!process.env.XMF_ORIGINAL_FILTERS_FILE) await writeFile(output + '.original.json', JSON.stringify({filters: original}), {mode: 0o600, flag: 'wx'});
+  await settings(allOn);
+  let mark = await navigate('thread');
+  const threadId = policy.statusId(fixtures.thread);
+  assert.ok((await slots()).some(s => s.post === threadId && s.category === 'A'));
+  assert.ok((await slots()).some(s => s.category === 'C'));
+  await evaluate(`document.querySelectorAll('xmf-slot').forEach(s=>s.shadowRoot.querySelector('button')?.click())`);
+  assert.ok((await slots()).every(s => !s.loaded && !s.pending), 'synthetic clicks rejected');
+  await evidence('thread startup A/C placeholders and synthetic-click rejection', mark, 0);
+  await duplicate(threadId);
+  await clickSlot(threadId); await imageCount(1);
+  assert.ok((await slots()).filter(s => s.duplicate).every(s => !s.loaded));
+  await evidence('thread trusted image click and duplicate isolation', mark, 1);
+  const inlineURL = await evaluate('location.href');
+  mark = capture.mark(); await ab('click', '#xmf-test-selected'); await until(gallery, 'inline owned viewer'); await imageCount(2);
+  assert.equal(await evaluate('location.href'), inlineURL, 'inline enlargement leaves route unchanged');
+  assert.ok((await control('Close media viewer', false)).focused, 'modal focuses Close');
+  await evidence('owned inline enlargement', mark, 1);
+  await ab('press', 'Escape'); await until(async () => !await gallery(), 'Escape closes viewer');
+  assert.ok(await evaluate('document.activeElement===document.getElementById("xmf-test-selected").closest("a")'), 'Close restores link focus');
+  await imageCount(1);
+  await ab('press', 'Enter'); await until(gallery, 'keyboard enlargement'); await imageCount(2);
+  await ab('press', 'Escape'); await until(async () => !await gallery(), 'keyboard close');
+  await settings({a: false, c: true, b: true}); await settings(allOn); await blocked();
+  await evaluate('document.getElementById("xmf-test-duplicate")?.remove()');
+  mark = capture.mark(); await settings({a: false, c: true, b: true}); await imageCount(1);
+  assert.ok((await slots()).filter(s => s.category === 'C').every(s => !s.loaded && !s.pending));
+  await evidence('A OFF automatic loading leaves C blocked', mark, 1);
+  await settings(allOn); await blocked();
+
+  mark = await navigate('album'); const albumId = policy.statusId(fixtures.album);
+  const count = 4;
+  await until(async () => (await slots()).filter(s => s.post === albumId).length === count, 'four album placeholders');
+  const albumKeys = (await evaluate(`(()=>{const slots=[...document.querySelectorAll('xmf-slot')].filter(s=>s.dataset.post===${JSON.stringify(albumId)});return slots.sort((a,b)=>Number(a.dataset.index)-Number(b.dataset.index)).map(s=>s.parentElement.querySelector('img')?.getAttribute('src'))})()`)).map(policy.assetKey);
+  assert.equal(new Set(albumKeys).size, count, 'distinct canonical album attachments');
+  await evidence('album startup', mark, 0); await clickSlot(albumId); await imageCount(count);
+  await evidence('album grouped still-image authorization', mark, count);
+  await ab('click', '#xmf-test-selected'); await until(gallery, 'album inline viewer'); await imageCount(count + 1);
+  await control('Next image'); await imageCount(count + 1);
+  await ab('press', 'ArrowLeft'); await imageCount(count + 1);
+  assert.ok(await control('Close media viewer')); await until(async () => !await gallery(), 'Close button');
+
+  mark = await navigate('album', '/photo/2');
+  assert.ok(await control('4 images blocked — click to load all images', false), 'visible direct gallery placeholder');
+  await evidence('direct photo startup', mark, 0);
+  await control('4 images blocked — click to load all images'); await imageCount(1);
+  await evidence('direct selection only', mark, 1, [albumKeys[1]]);
+  mark = capture.mark(); await control('Next image'); await imageCount(1);
+  await evidence('direct Next selects one attachment', mark, 1, [albumKeys[2]]);
+  mark = capture.mark(); await ab('press', 'ArrowLeft'); await imageCount(1);
+  await evidence('direct Previous selects one attachment', mark, 1, [albumKeys[1]]);
+  assert.equal(await evaluate('location.href'), fixtures.album + '/photo/2', 'owned navigation does not invoke X shortcuts');
+  await settings({a: false, c: true, b: true}); await settings(allOn); await blocked();
+  assert.ok(await control('4 images blocked — click to load all images', false));
+  await evaluate('globalThis.__xmfReloadMarker=true'); mark = capture.mark();
+  await capture.cdp.call('Page.reload', {ignoreCache: mode === 'cold'}, capture.root);
+  await until(async () => await evaluate('globalThis.__xmfReloadMarker===undefined') && await control('4 images blocked — click to load all images', false), 'direct gallery reload');
+  await evidence('direct photo reload loses grants', mark, 0);
+  await control('Close media viewer'); await until(async () => !(await evaluate('location.pathname.includes("/photo/")')), 'direct Close replaces photo route');
+  await until(async () => (await slots()).some(s => s.ready), 'base post after Close');
+  // A semantic status link, not a private X selector, exercises native SPA routing.
+  await navigate('thread');
+  const reply = await evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.category==='C');const a=[...s.closest('article').querySelectorAll('a[href]')].find(a=>a.pathname.endsWith('/status/'+s.dataset.post));a.id='xmf-test-route';a.scrollIntoView({block:'center',behavior:'instant'});return s.dataset.post})()`);
+  mark = capture.mark(); await ab('click', '#xmf-test-route');
+  await until(async () => await evaluate(`location.pathname.endsWith('/status/${reply}')`), 'status SPA route');
+  await until(async () => (await slots()).some(s => s.post === reply && s.category === 'A'), 'new route focus');
+  await evidence('status SPA focus and revoked grants', mark, 0);
+
+  for (const alias of ['customVideo', 'encodedVideo']) {
+    mark = await navigate(alias); const post = policy.statusId(fixtures[alias]);
+    await duplicate(post); await evidence(alias + ' startup poster/playlist barrier', mark, 0);
+    await clickSlot(post);
+    await until(async () => (await capture.player()).some(p => p.kind === 'video' && p.ready >= 1), alias + ' metadata');
+    await capture.player('play'); await until(async () => (await capture.player()).some(p => p.time > 1 && !p.paused), alias + ' playback');
+    await capture.player('seek'); await until(async () => (await capture.player()).some(p => p.time >= 39 && p.ready >= 2), alias + ' seek');
+    assert.ok((await slots()).filter(s => s.duplicate).every(s => !s.loaded));
+    await evidence(alias + ' MP4 playback/seek and duplicate isolation', mark, 1);
+    await settings({a: false, c: true, b: true}); await settings(allOn); await blocked();
+    mark = capture.mark(); await new Promise(resolve => setTimeout(resolve, 1000));
+    await evidence(alias + ' no new media during one-second post-revocation window', mark, 0);
+    await evaluate('globalThis.__xmfReloadMarker=true');
+    mark = capture.mark(); await capture.cdp.call('Page.reload', {ignoreCache: mode === 'cold'}, capture.root);
+    await until(() => evaluate('globalThis.__xmfReloadMarker===undefined'), alias + ' new document');
+    await until(async () => (await slots()).some(s => s.ready && !s.loaded), alias + ' reload');
+    await evidence(alias + ' reload revokes authorization', mark, 0);
   }
-  await evidence('eight settings combinations keep page requests blocked', matrixMark, null);
-  await settings(true, true, true);
-  await until(async () => (await state()).every(s => !s.loaded && !s.pending), 'settings ON must revoke');
-  for (const [name, url] of [['video', video], ['custom-cover video', customCoverVideo]]) {
-    mark = capture.mark(); await navigate(url);
-    if (url === customCoverVideo) {
-      // A second DOM occurrence uses the real post metadata and CDN source.
-      await evaluate(`(()=>{const a=[...document.querySelectorAll('article')].find(a=>[...a.querySelectorAll('time')].some(t=>t.closest('a')?.pathname==='/github/status/2111225205309780009'));const copy=a.cloneNode(true);copy.id='xmf-video-duplicate-fixture';copy.querySelectorAll('xmf-slot').forEach(s=>s.remove());a.after(copy);return true})()`);
-      await until(()=>evaluate(`!!document.querySelector('#xmf-video-duplicate-fixture xmf-slot[data-ready="true"]')`), 'custom-cover duplicate discovery');
-      await evaluate(`(()=>{document.querySelectorAll('xmf-slot').forEach(s=>s.shadowRoot.querySelector('button')?.click());return true})()`);
-    }
-    await evidence(mode + ' ' + name + ' before click', mark);
-    await clickFirst();
-    await until(async () => (await capture.player()).some(p => p.kind === 'video' && p.ready >= 1), name + ' metadata');
-    await capture.player('play');
-    await until(async () => (await capture.player()).some(p => p.time > 1 && !p.paused), name + ' real playback');
-    await capture.player('seek');
-    await until(async () => (await capture.player()).some(p => p.time >= 40 && p.ready >= 2), name + ' range seek');
-    await capture.player('pause');
-    if (url === customCoverVideo) assert.equal(await evaluate(`!!document.querySelector('#xmf-video-duplicate-fixture xmf-slot')?.shadowRoot.querySelector('iframe')`), false, 'custom-cover duplicate must stay blocked');
-    await evidence('single ' + name + ' playback and seeking', mark, 1);
-    if (url === customCoverVideo) {
-      const reloadMark = capture.mark();
-      await ab('reload');
-      await until(async()=> {const slots=await state();return slots.some(s=>s.category==='A'&&s.ready)&&slots.every(s=>!s.loaded&&!s.pending);}, 'custom-cover reload clears manual selection');
-      await evidence('custom-cover reload before automatic eligibility', reloadMark, 0);
-      const automaticMark = capture.mark();
-      await settings(false, true, true);
-      await until(async()=> (await state()).some(s=>s.category==='A'&&s.loaded), 'custom-cover automatic eligibility');
-      await until(async()=> (await capture.player()).some(p=>p.kind==='video'&&p.ready>=1), 'custom-cover automatic video metadata');
-      await evidence('custom-cover automatic video loading', automaticMark, null);
-      await settings(true, true, true);
-      await until(async()=> (await state()).every(s=>!s.loaded&&!s.pending), 'custom-cover category reblocking');
-      report.results.push({name:'custom-cover automatic eligibility and revocation',passed:true});
-    }
-  }
-  mark = capture.mark(); await navigate(quote);
-  await evidence('quote before click', mark);
-  await clickFirst();
-  await until(async () => (await capture.player()).some(p => p.width > 0), 'quoted image');
-  await evidence('single quoted image', mark, 1);
-  const focusedIndex = await evaluate(`[...document.querySelectorAll('article')].findIndex(a=>[...a.querySelectorAll('time')].some(t=>t.closest('a')?.pathname==='/thsottiaux/status/2111245052513259606'))`);
-  assert.equal(focusedIndex, 1, 'regression focus must be the second article');
-  // Worker shutdown is scoped to this extension, never the user's site workers.
-  const workers = (await capture.cdp.call('Target.getTargets')).targetInfos.filter(t=>t.type==='service_worker'&&t.url===`chrome-extension://${id}/worker.js`);
-  assert.equal(workers.length, 1);
-  assert.equal((await capture.cdp.call('Target.closeTarget', {targetId: workers[0].targetId})).success, true);
-  await until(async () => (await state()).every(s=>!s.loaded), 'worker stopped players');
-  await until(async () => (await state()).some(s=>s.loaded), 'worker reconnect retained selected occurrence');
-  report.results.push({name: 'worker stop and reconnect', passed: true});
-  mark = capture.mark(); await navigate(image); await clickFirst();
-  await until(async () => (await capture.player()).some(p => p.width > 0), 'image before SPA transition');
-  const timeOrigin = await evaluate('performance.timeOrigin');
-  const destination = await evaluate(`(()=>{const links=[...document.querySelectorAll('article time')].map(t=>t.closest('a')).filter(Boolean);const link=links.find(l=>l.pathname!=='/ArtificialAnlys/status/2110893784422908225'&&l.pathname.startsWith('/ArtificialAnlys/status/'));link.click();return link.href})()`);
-  await until(()=>evaluate(`location.href===${JSON.stringify(destination)}`), 'SPA route');
-  await until(async () => (await state()).every(s=>!s.loaded), 'SPA grants revoked');
-  assert.equal(await evaluate('performance.timeOrigin'), timeOrigin, 'must be a same-document navigation');
-  await ab('back'); await ab('tab', target);
-  await until(async () => (await state()).length>0&&(await state()).every(s=>!s.loaded), 'Back resets grants');
-  report.results.push({name: 'SPA and Back reset grants', passed: true});
-  assert.equal(capture.failures.length, 0, capture.failures.join('\n'));
   report.passed = true;
 } catch (error) {
-  report.passed = false; report.error = String(error);
-  try { report.ui = await state(); } catch {}
-  process.exitCode = 1; console.error(String(error));
+  report.passed = false; report.failure = String(error.message).replaceAll(ws, '[CDP]'); process.exitCode = 1;
+  console.error(report.failure);
 } finally {
-  try { await ab('tab', target); await evaluate(`(()=>{document.querySelectorAll('#xmf-other-fixture,#xmf-author-fixture,#xmf-duplicate-fixture,#xmf-video-duplicate-fixture').forEach(e=>e.remove());return true})()`); } catch {}
-  if (original && popup) {
-    try { await settings(original.a, original.c, original.b); } catch (error) { report.restoreError = String(error); }
-  }
-  await capture.stop();
-  await writeFile(output, JSON.stringify(report, null, 2) + '\n');
-  console.log('Saved minimal report:', output);
-  if (secondary) { try { await ab('tab', 'close', secondary); } catch {} }
-  if (popup) { try { await ab('tab', 'close', popup); await ab('tab', target); } catch {} }
+  try {
+    if (original && popupSession) { await settings(original); report.preferencesRestored = true; }
+  } catch { report.preferencesRestored = false; process.exitCode = 1; }
+  try { if (popup) await capture.cdp.call('Target.closeTarget', {targetId: popup}); }
+  finally { await capture.stop(); }
+  await writeFile(output, JSON.stringify(report, null, 2) + '\n', {mode: 0o600});
 }

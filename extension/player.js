@@ -41,6 +41,13 @@ function load() {
   document.body.prepend(media);
   media.src = source.url;
 }
+// Image iframe keys cannot bubble into the owned viewer's document.
+addEventListener("keydown", event => {
+  if (!event.isTrusted || source?.kind !== "image" || event.ctrlKey || event.metaKey || event.altKey ||
+      !["ArrowLeft", "ArrowRight", "Escape"].includes(event.key)) return;
+  event.preventDefault();
+  parent.postMessage({type: "xmf-viewer-key", key: event.key}, "*");
+});
 retry.addEventListener("click", load);
 port.onMessage.addListener(msg => {
   if (msg.type === "stop") stop();

@@ -85,15 +85,8 @@ var XMFPolicy = (function () {
   }
 
   function sameAsset(a, b) {
-    for (const kind of ["image", "video"]) {
-      const left = mediaURL(a, kind);
-      const right = mediaURL(b, kind);
-      if (left && right) {
-        // Video resolution is part of its path; never merge different renditions.
-        return assetKey(left) === assetKey(right);
-      }
-    }
-    return false;
+    const left = assetKey(a);
+    return left !== null && left === assetKey(b);
   }
 
   function videoMatchesPoster(poster, video, mediaId) {

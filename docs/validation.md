@@ -1,40 +1,32 @@
 # Validation and limits
 
-This is a concise coverage summary, not a run log. Detailed reports and captures stay local. Reproduction commands and browser-safety procedures are in the [development guide](development.md); required acceptance cases are in [specs.md §8](../specs.md#8-implementation-gates-and-acceptance-tests).
+Focused current-X browser regressions pass in normal mode and with target-level HTTP cache disabled/site worker bypassed, in the dedicated isolated Chrome. Earlier native-viewer and selector-dependent results are not inherited coverage. Commands and safety are in the [development guide](development.md); the full acceptance matrix in [specs.md §8](../specs.md#8-implementation-gates-and-acceptance-tests) remains a requirement, not a completed coverage claim.
 
-## Network evidence
+## Evidence boundaries
 
-Browser checks observe requests from the X page and extension renderers before navigation. Filtered page requests are canceled with `net::ERR_BLOCKED_BY_CLIENT`; successful authorized image/video responses come from extension-owned renderers. Visible placeholders and decoded media are checked separately. DOM mocks and zero Resource Timing sizes do not establish zero downloads.
+The [implementation boundaries](../specs.md#10-selected-implementation-and-verified-boundaries) are not substitute browser evidence. Apply the [network evidence protocol](../specs.md#network-evidence-protocol): capture page and extension-renderer traffic before navigation, distinguish canceled attempts from authorized responses, and separately check visible output. DOM mocks, static checks, cached responses and zero Resource Timing sizes do not establish zero downloads.
 
-The static page barrier remains enabled for images, video, XHR and fetch. Loading uses per-occurrence, single-use tickets with sender, document, route and destination validation, not URL/CDN/tab allow rules. See [the implementation boundaries](../specs.md#10-selected-implementation-and-verified-boundaries).
+The offline suite exercises policy/settings migration, metadata handling, semantic attachment discovery, gallery behavior and privileged loader boundaries. Its results must be reported separately from live browser results; it cannot establish compatibility with current X responses, native focus behavior or real network isolation. Static checks validate resources, syntax, JSON and local documentation links, not media behavior.
 
-## Route-owned photo viewer
+## Measured browser coverage
 
-The blank-image failure came from requiring carousel-specific React media props that were absent in a listless single-image viewer. One extension-owned display surface now selects the attachment from the current status and `/photo/N`, without identifying native slides or reading their React props. Native DOM is used only to locate the display area; missing metadata shows a non-loading placeholder. Missing or ambiguous display areas revoke the viewer rather than reuse stale content.
+- The public image conversation shows visible A/C placeholders with all filters ON and no successful pre-click media responses. Synthetic clicks do not authorize loading. Trusted loading leaves a cloned duplicate occurrence blocked; A OFF loads the focused image while C stays blocked.
+- The four-image album loads its inline still-image group. The owned gallery passes pointer/keyboard entry, Close/Escape, opener-focus restoration and Previous/Next. Inline entry leaves the URL unchanged. Direct `/photo/2` startup/reload stays blocked; each authorized selection fetches only its expected canonical attachment. Arrow navigation does not invoke X's route shortcuts. Settings revoke gallery renderers, and direct Close replaces the photo route with its base post.
+- Native status-link SPA navigation recomputes the focused post and leaves media blocked. Duplicate checks use removable cloned occurrences, not proof of X's full virtualization behavior.
+- Both custom-cover and encoded-thumbnail videos show ready placeholders before authorization, then play and seek with one authorized progressive MP4 asset while duplicates stay blocked. Settings remove the renderer; a bounded one-second post-revocation window has no new media requests. Reload loses grants. Observed page-origin image/poster, playlist and MP4/init attempts are canceled with `net::ERR_BLOCKED_BY_CLIENT`; successful authorized responses come from extension renderers.
 
-Focused browser checks cover:
+These checks do not establish adaptive `.m4s` delivery, audio audibility, every video family or long-running revocation behavior. Normal mode includes site-worker-controlled pages with the registered X worker under network observation; this does not establish every CacheStorage or synthesized-response scenario. Detailed captures stay local.
 
-- Single-image manual enlargement with A/C/B ON and automatic enlargement with A OFF, C/B ON; duplicate isolation, native Close/Escape/history, keyboard activation and Retry focus recovery.
-- Direct startup and reload with visible placeholders and no successful pre-selection media responses. Each selection window loads only the selected canonical asset, including in cold mode with HTTP cache disabled and the site worker bypassed on the test target.
-- Listless and carousel-based single-image layouts, plus a four-image album. Next/Previous, settings revocation and direct reload pass. The album's cold-mode check also compares each selected renderer with its corresponding decoded inline attachment.
-- Normal and cold checks for the reported single-image case and four-image album; the alternate single-image layout is normal-mode coverage only. Retry uses a local decode error, not a simulated CDN outage.
+## Current behavior and limits
 
-Viewer loading can make an additional authorized request for an image already loaded inline. It is not a zero-additional-download design.
+- Integration targets current X's `media_entities2` and current author metadata, semantic article/media/status anchors and document-local occurrences. No historical schema fallback, `data-testid` selector contract or React identity is supported. Changed or ambiguous inputs can leave attachments unavailable or require a new adapter.
+- A full DOM occurrence replacement loses manual grants and may require another click. New occurrences, duplicate locations and other tabs never inherit grants by URL alone.
+- Opening the gallery can cause another authorized request for an image already loaded inline. It is not a zero-additional-download design. Native swipe/drag, full-resolution zoom and image-save menus are not promised features.
+- Fixed-rendition MP4 is implemented, not adaptive HLS. HLS-only, live, paid and third-party video may remain unavailable. Page-origin playlists/segments are covered by the static barrier; that is not proof of successful adaptive playback.
+- Full-surface/eight-setting browser coverage, fresh-install storage, full browser restart, native BFCache and cross-tab behavior remain unproven for this rewrite. Lists/Communities, account-dependent bookmarks/notifications, mixed/GIF/quoted-video posts and additional delivery families need suitable fixtures.
+- Redirect rejection has offline tests, not a positive current live test against a redirecting media asset. Chrome 128 is the minimum supported version, not a verified test environment.
+- New hosts/paths or media bytes embedded in required HTML/API responses need renewed discovery. DMs, Spaces and external embeds are outside the post-media scope. Installing/updating cannot undo previous downloads; refresh existing X tabs after loading updated scripts.
 
-## Video and offline checks
+## Release boundary
 
-Normal-mode video regressions cover custom-cover and encoded-thumbnail posts: no successful pre-click media, one authorized progressive MP4, playback and range seeking, duplicate isolation, reload, automatic loading and filter-ON revocation. These are progressive MP4 results, not proof of adaptive HLS playback.
-
-The offline suite covers filter defaults/migration and all eight combinations; classification; URL/media identity validation; sender/document/route/ticket boundaries; revocation races; viewer ownership and ordinal preservation; ambiguous or replaced stages; cross-status cleanup; forged messages; and keyboard/focus behavior. Static checks cover resources, syntax, JSON and documentation links. See the [local check commands](development.md#local-checks-and-reload).
-
-## Remaining limits
-
-- The viewer still depends on X's photo routes, API metadata and dialog/display-area hooks. Native touch/swipe/drag gestures, full-resolution zoom and image-save context menus are not verified.
-- Current focused viewer checks are not a fresh full-surface, eight-setting browser, virtualization or cross-tab pass. The supplementary avatar/profile regression did not complete; earlier results are not promoted to current coverage.
-- Full browser restart, fresh-install storage behavior and native BFCache recovery remain unverified. Worker recovery and mocked lifecycle tests do not replace those checks.
-- Lists/Communities, account-dependent bookmarks/notifications, additional album layouts, mixed/GIF/quoted-video posts and additional delivery families need suitable live fixtures.
-- Playback uses fixed-rendition MP4. HLS-only, live, paid and third-party media may remain unavailable. Page-origin playlists/segments remain covered by the static barrier, but successful adaptive segment delivery is not proven.
-- Loader redirect rejection has offline coverage, not a positive live test against a redirecting media asset.
-- New media hosts/paths or bytes embedded in required API/HTML responses require renewed discovery. Installing or updating cannot undo prior downloads; refresh existing X tabs to install updated content scripts.
-
-The release archive includes the route-owned viewer change. Packaging checks verify archive integrity, inventory and source hashes; they do not imply store submission or publication.
+Follow the [release gates](store/README.md#release-gates) and verify that the package matches the validated source. Archive integrity alone does not establish browser behavior or authorize submission/publication.

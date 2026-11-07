@@ -38,14 +38,15 @@ Turn all three ON to filter all recognized post media. Settings are saved in thi
 - Click a blocked image to load the still images from that attachment group in that location.
 - Click a blocked video to load only that video, with native playback controls.
 - You can also focus a placeholder with Tab and press Enter.
+- In the current source, click a loaded image to enlarge it in the extension's own gallery. Use Previous/Next or arrow keys, and Close/Escape to exit. Inline enlargement leaves the page URL unchanged; closing a direct photo URL returns to its post.
 
-Other posts, separate quote groups and copies in another tab do not inherit your click. Reloading or changing pages clears temporary selections. Turning a category ON blocks its media again; previously downloaded bytes cannot be undone.
+Other posts, separate quote groups and copies in another tab do not inherit your click. Reloading, changing pages or X fully replacing an attachment's rendered location clears its temporary selection. Turning a category ON blocks its media again; previously downloaded bytes cannot be undone.
 
 ## Limits
 
 Filters use post categories, not a judgment of whether content is unpleasant. Avatars, profile banners and ordinary link previews are not targets; DMs, Spaces and external embeds are outside the verified scope.
 
-Some formats and X layouts remain unsupported or unverified. HLS-only, live, paid and third-party videos may not play. See [known limitations and troubleshooting](SUPPORT.md#known-limitations).
+The current source targets current X layouts and metadata; X changes can break compatibility. HLS-only, live, paid and third-party videos may not play. See [measured coverage and gaps](docs/validation.md) and [troubleshooting](SUPPORT.md).
 
 ## Support and privacy
 

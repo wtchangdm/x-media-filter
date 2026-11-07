@@ -1,131 +1,23 @@
 (() => {
   "use strict";
   const P = XMFPolicy;
-  const selector = '[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="swipe-to-dismiss"]';
   const posts = new Map();
   const items = new Map();
-  const manual = new Map();
-  const ambiguousIdentities = new Set();
-  const articleIds = new WeakMap();
-  const pendingIdentities = new Map();
+  const boundaries = new WeakMap();
   const dirty = new Set();
   let settings = {a: true, c: true, b: true};
   let route = P.routeKey(location.href);
   let locationURL = location.href;
   let epoch = crypto.randomUUID();
-  let focusAuthor = null;
-  let contextReady = !P.statusId(location.href);
   let port;
   let metadataPort;
   let scheduled = false;
-  let articleSequence = 0;
-  let viewerHandoff = null;
-  let viewerGrant = null;
-  const viewerIdentities = new Set();
+  let sequence = 0;
   let viewerSurface = null;
+  let dismissedViewerURL = null;
 
-  function clearViewerGrants() {
-    viewerGrant = null;
-    if (!viewerIdentities.size) return;
-    for (const identity of viewerIdentities) manual.delete(identity);
-    for (const item of items.values()) if (viewerIdentities.has(item.identity)) reset(item);
-    viewerIdentities.clear();
-  }
-
-  function selectedViewer(element, mediaIndex) {
-    return element === viewerSurface?.element && viewerSurface.dialog.isConnected &&
-      viewerSurface.postId === P.statusId(location.href) && mediaIndex === Number(location.pathname.match(/\/photo\/(\d+)$/)?.[1]) - 1;
-  }
-  function removeViewerSurface() {
-    if (!viewerSurface) return;
-    const item = items.get(viewerSurface.element);
-    if (item) { reset(item); items.delete(item.element); }
-    viewerSurface.element.remove();
-    viewerSurface = null;
-  }
-  function syncViewer() {
-    if (!/\/photo\/\d+$/.test(location.pathname)) { removeViewerSurface(); return; }
-    // Native DOM locates the display area only, never the selected attachment or its grant.
-    const stages = new Map();
-    for (const swipe of document.querySelectorAll('[role="dialog"] [data-testid="swipe-to-dismiss"]')) {
-      if (swipe.closest('article')) continue;
-      const dialog = swipe.closest('[role="dialog"]');
-      const list = swipe.closest('[role="list"]');
-      const stage = list && dialog.contains(list) ? list.parentElement : swipe.parentElement;
-      if (stage && stage !== dialog && dialog.contains(stage)) stages.set(stage, dialog);
-    }
-    if (stages.size !== 1) {
-      if (viewerSurface) { clearViewerGrants(); removeViewerSurface(); }
-      return;
-    }
-    const [stage, dialog] = stages.entries().next().value;
-    if (viewerSurface && viewerSurface.dialog !== dialog) { clearViewerGrants(); removeViewerSurface(); }
-    if (!viewerSurface) {
-      viewerSurface = {element: document.createElement("xmf-viewer"), dialog,
-        postId: P.statusId(location.href), nonce: ++articleSequence};
-    }
-    const element = viewerSurface.element;
-    if (element.parentElement !== stage) {
-      const item = items.get(element);
-      if (item) reset(item);
-      if (getComputedStyle(stage).position === "static") stage.style.position = "relative";
-      stage.append(element);
-    }
-    const desc = viewerDescriptor();
-    let item = items.get(element);
-    if (item && item.base !== desc.base) { reset(item); item.host.remove(); items.delete(element); item = null; }
-    if (!item) make(element, desc);
-    else { Object.assign(item, desc); if (!item.host.isConnected) element.append(item.host); }
-  }
-  function viewerDescriptor() {
-    const postId = P.statusId(location.href);
-    const mediaIndex = Number(location.pathname.match(/\/photo\/(\d+)$/)?.[1]) - 1;
-    const attachment = posts.get(postId)?.media[mediaIndex];
-    const poster = attachment?.type === "photo" ? attachment.poster : null;
-    return {isViewer: true, postId, attachmentPost: postId, author: posts.get(postId)?.author || null,
-      mediaIndex, poster, kind: "image", video: null, mediaId: attachment?.mediaId || null,
-      base: [postId, "viewer", mediaIndex, poster ? P.assetKey(poster) : "unresolved"].join("|"),
-      occurrence: "viewer:" + viewerSurface.nonce, boundaryNonce: viewerSurface.nonce};
-  }
-  function imageKey(item) { return item.mediaIndex + "|" + P.assetKey(item.poster); }
-  function prepareViewer(item, link) {
-    if (item.kind !== "image" || !item.imageReady || !item.frame ||
-        link.origin !== location.origin || P.statusId(link.href) !== item.attachmentPost ||
-        !link.pathname.endsWith("/photo/" + (item.mediaIndex + 1))) return;
-    const assets = new Set();
-    for (const candidate of items.values()) {
-      if (candidate.kind === "image" && candidate.boundaryNonce === item.boundaryNonce &&
-          candidate.attachmentPost === item.attachmentPost && candidate.poster &&
-          (manual.has(candidate.identity) || !P.blocked(settings, category(candidate)))) assets.add(imageKey(candidate));
-    }
-    viewerHandoff = {path: link.pathname, route: P.routeKey(link.href), assets,
-      category: category(item), expires: Date.now() + 5000};
-  }
-  function updateViewer(next) {
-    if (viewerHandoff?.expires < Date.now()) viewerHandoff = null;
-    if (locationURL !== location.href && viewerHandoff) {
-      clearViewerGrants();
-      viewerGrant = location.pathname === viewerHandoff.path && next === viewerHandoff.route
-        ? {...viewerHandoff, dialog: null} : null;
-      viewerHandoff = null;
-    }
-    if (!/\/photo\/\d+$/.test(location.pathname) || (next !== route && viewerGrant?.route !== next) ||
-        (viewerGrant && (next !== viewerGrant.route ||
-        (viewerGrant.dialog ? !viewerGrant.dialog.isConnected : viewerGrant.expires < Date.now())))) clearViewerGrants();
-  }
-  function inheritViewer(item) {
-    if (!viewerGrant || item.kind !== "image" || !item.poster || !viewerGrant.assets.has(imageKey(item)) ||
-        P.statusId(location.href) !== item.attachmentPost || !item.isViewer) return;
-    const dialog = item.element.closest('[role="dialog"]');
-    if (!dialog || (viewerGrant.dialog && viewerGrant.dialog !== dialog)) return;
-    if (!selectedViewer(item.element, item.mediaIndex)) return;
-    viewerGrant.dialog = dialog;
-    viewerIdentities.add(item.identity);
-    manual.set(item.identity, category(item));
-  }
-
-  function post(msg) {
-    try { port?.postMessage(msg); } catch { disconnect(); }
+  function post(message) {
+    try { port?.postMessage(message); } catch { disconnect(); }
   }
   function disconnect() {
     port = null;
@@ -143,367 +35,359 @@
       post({type: "context", route, epoch});
     } catch { disconnect(); }
   }
+  function relationship(id, focus) {
+    const a = posts.get(focus), b = posts.get(id);
+    if (a?.conversation && b?.conversation) return a.conversation === b.conversation ? "conversation" : "independent";
+    for (const [start, destination] of [[b, focus], [a, id]]) {
+      let current = start;
+      for (let depth = 0; current && depth < 100; depth++) {
+        if (current.parent === destination) return "conversation";
+        current = posts.get(current.parent);
+      }
+    }
+    return null;
+  }
+  function category(item) {
+    const focus = P.statusId(location.href);
+    return P.classify({focusId: focus, focusAuthor: posts.get(focus)?.author,
+      postId: item.postId, postAuthor: posts.get(item.postId)?.author,
+      relationship: relationship(item.postId, focus)});
+  }
   function context() {
-    // X reuses the swipe viewer for avatars/banners, not just post attachments.
-    document.documentElement?.toggleAttribute("data-xmf-status", !!P.statusId(location.href));
     const next = P.routeKey(location.href);
-    updateViewer(next);
-    if (locationURL !== location.href && viewerSurface) {
-      const item = items.get(viewerSurface.element);
-      if (item && !selectedViewer(item.element, item.mediaIndex)) reset(item);
-      if (!/\/photo\/\d+$/.test(location.pathname) || viewerSurface.postId !== P.statusId(location.href)) removeViewerSurface();
+    document.documentElement?.toggleAttribute("data-xmf-status", !!P.statusId(location.href));
+    if (locationURL !== location.href) {
+      closeViewer(false);
+      dismissedViewerURL = null;
+      locationURL = location.href;
+      queue(document);
     }
-    if (next === route) {
-      if (locationURL !== location.href) { locationURL = location.href; queue(document); }
-      return;
-    }
-    locationURL = location.href;
-    route = next; epoch = crypto.randomUUID(); focusAuthor = null; contextReady = !P.statusId(location.href);
-    manual.clear(); ambiguousIdentities.clear();
-    for (const item of items.values()) reset(item);
+    if (next === route) return;
+    route = next; epoch = crypto.randomUUID();
+    for (const item of items.values()) { item.manual = false; reset(item); }
     post({type: "context", route, epoch});
-    queue(document);
   }
   function applySettings(next) {
     const previous = settings;
     settings = P.normalizeSettings(next);
-    const turnedOn = cat => cat === "A" ? (!previous.a && settings.a) : cat === "C" ? (!previous.c && settings.c) :
-      cat === "B" ? (!previous.b && settings.b) :
-      (!previous.a && settings.a) || (!previous.c && settings.c) || (!previous.b && settings.b);
-    if (viewerHandoff && (turnedOn(viewerHandoff.category) || turnedOn("A"))) viewerHandoff = null;
-    if (viewerGrant && (turnedOn(viewerGrant.category) || turnedOn("A"))) clearViewerGrants();
-    for (const [identity, cat] of manual) if (turnedOn(cat)) manual.delete(identity);
-    for (const item of items.values()) if (turnedOn(category(item))) reset(item);
+    const turnedOn = category => ["A", "C", "B"].some(candidate =>
+      (category === null || candidate === category) && !P.blocked(previous, candidate) && P.blocked(settings, candidate));
+    if (viewerSurface && turnedOn(category(viewerSurface))) viewerSurface.allowed.clear();
+    for (const item of items.values()) if (turnedOn(category(item))) {
+      item.manual = false; reset(item);
+    }
     queue(document);
   }
   function message(msg) {
     context();
-    if (msg.type === "settings") {
-      applySettings(msg.settings);
-    } else if (msg.type === "revoked" && msg.epoch === epoch) {
-      const item = [...items.values()].find(value => value.id === msg.id);
+    if (msg.type === "settings") applySettings(msg.settings);
+    else if (msg.type === "revoked" && msg.epoch === epoch) {
+      const item = [...items.values()].find(item => item.id === msg.id);
       applySettings(msg.settings);
       if (item?.id === msg.id) reset(item);
     } else if (msg.epoch === epoch && (msg.type === "ticket" || msg.type === "denied")) {
-      const item = [...items.values()].find(value => value.id === msg.id);
+      const item = [...items.values()].find(item => item.id === msg.id);
       if (!item || !item.element.isConnected || !item.pending) { post({type: "revoke", id: msg.id}); return; }
       item.pending = false;
       if (msg.type === "denied") { item.button.disabled = false; item.button.textContent = "Unable to load — click to retry"; return; }
-      if (!manual.has(item.identity) && P.blocked(settings, category(item))) { reset(item); return; }
       item.workerCategory = category(item);
+      if (!item.manual && P.blocked(settings, item.workerCategory)) { reset(item); return; }
       post({type: "category", id: item.id, epoch, category: item.workerCategory});
       const frame = document.createElement("iframe");
       frame.title = item.kind === "video" ? "Selected post video" : "Selected post image";
-      frame.allow = "fullscreen";
-      frame.referrerPolicy = "no-referrer";
+      frame.allow = "fullscreen"; frame.referrerPolicy = "no-referrer";
       frame.src = chrome.runtime.getURL("player.html") + "#" + msg.token;
       item.shadow.replaceChildren(item.style, frame);
       item.frame = frame;
     }
   }
   function blockedLabel(item) {
-    return item.kind === "image" && item.imageCount > 1
-      ? `${item.imageCount} images blocked — click to load all images`
+    return item.kind === "image" && item.imageCount > 1 ? `${item.imageCount} images blocked — click to load all images`
       : `${item.kind === "video" ? "Video" : "Image"} blocked — click to load`;
-  }
-  function activate(item) {
-    // Refresh descriptors before grouping so recycled nodes cannot inherit a click.
-    context(); dirty.add(document); flush();
-    if (items.get(item.element) !== item) return;
-    if (item.isViewer && selectedViewer(item.element, item.mediaIndex)) {
-      // Remember the whole attachment group, including siblings X has not mounted yet.
-      const assets = new Set();
-      for (const [mediaIndex, media] of (posts.get(item.attachmentPost)?.media || []).entries()) {
-        if (media.type === "photo" && media.poster) assets.add(imageKey({mediaIndex, poster: media.poster}));
-      }
-      viewerGrant = {route, assets, category: category(item), dialog: item.element.closest('[role="dialog"]')};
-    }
-    for (const candidate of items.values()) {
-      if (candidate === item || (item.kind === "image" && candidate.kind === "image" &&
-          candidate.boundaryNonce === item.boundaryNonce && candidate.attachmentPost === item.attachmentPost)) {
-        authorize(candidate, true);
-      }
-    }
   }
   function reset(item) {
     post({type: "revoke", id: item.id});
     item.id = crypto.randomUUID(); item.workerCategory = undefined;
     item.frame?.remove(); item.frame = null; item.pending = false; item.imageReady = false;
-    item.button.disabled = false;
-    item.button.textContent = blockedLabel(item);
-    if (item.shadow.firstElementChild !== item.style || !item.button.isConnected)
-      item.shadow.replaceChildren(item.style, item.button);
+    item.button.disabled = false; item.button.textContent = blockedLabel(item);
+    item.shadow.replaceChildren(item.style, item.button);
+  }
+  function dispose(item) {
+    post({type: "revoke", id: item.id});
+    item.frame?.remove(); item.manual = false; item.pending = false; item.frame = null;
+    item.host.remove(); items.delete(item.element);
+    if (!item.isViewer) {
+      item.element.removeAttribute("data-xmf-covered");
+      for (const [name, saved] of Object.entries(item.presentation)) {
+        if (item.element.style[name] === saved.applied) item.element.style[name] = saved.original;
+      }
+    }
   }
   function authorize(item, clicked = false) {
     context();
-    if (item.pending || item.frame || !item.element.isConnected) return;
+    if (items.get(item.element) !== item || item.pending || item.frame || !item.element.isConnected) return;
     const src = item.kind === "video" ? item.video : item.poster;
-    if (!src) {
+    if (!src || (item.kind === "video" && !P.videoMatchesPoster(item.poster, src, item.mediaId))) {
       item.button.textContent = "Media source unavailable — waiting for X metadata. Click to retry.";
       return;
     }
-    if (clicked) {
-      if (item.isViewer) viewerIdentities.add(item.identity);
-      manual.set(item.identity, category(item));
-      if (manual.size > 1000) manual.delete(manual.keys().next().value);
-    }
-    // Only the single extension-owned surface can use a viewer authorization.
-    if (item.isViewer && !selectedViewer(item.element, item.mediaIndex)) return;
+    if (clicked) item.manual = true;
+    const cat = category(item);
+    if (!item.manual && P.blocked(settings, cat)) return;
+    if (item.isViewer && item.element !== viewerSurface?.ui.stage) return;
     if (!port) connect();
     if (!port) { item.button.textContent = "Extension unavailable — reload this X tab to retry"; return; }
-    item.workerCategory = category(item);
+    item.workerCategory = cat;
     item.pending = true; item.button.disabled = true; item.button.textContent = "Loading selected media…";
-    post({type: "grant", id: item.id, epoch, url: src, kind: item.kind,
-      poster: item.poster, mediaId: item.mediaId, category: category(item), manual: manual.has(item.identity)});
+    post({type: "grant", id: item.id, epoch, url: src, kind: item.kind, poster: item.poster,
+      mediaId: item.mediaId, category: cat, manual: item.manual});
   }
-  function outerPost(article) {
-    if (!article) return null;
-    for (const time of article.querySelectorAll("time")) {
-      const link = time.closest("a[href]");
-      const id = link && P.statusId(link.href);
-      if (id && !link.closest('[role="link"]:not(a)')) {
-        const handle = new URL(link.href).pathname.split("/")[1].toLowerCase();
-        const authorBlock = article.querySelector('[data-testid="User-Name"]');
-        const verified = [...(authorBlock?.querySelectorAll("a[href]") || [])].some(a => {
-          try { return new URL(a.href).pathname.toLowerCase() === "/" + handle; } catch { return false; }
-        });
-        return {id, author: verified ? handle : posts.get(id)?.author || null};
-      }
+  function imageKey(item) { return item.mediaIndex + "|" + P.assetKey(item.poster); }
+  function activate(item) {
+    context(); dirty.add(document); flush();
+    if (items.get(item.element) !== item) return;
+    if (item.isViewer) {
+      for (const entry of viewerSurface.entries) if (entry.poster) viewerSurface.allowed.add(imageKey(entry));
+      authorize(item, true);
+      return;
     }
-    return null;
-  }
-  function relationship(id) {
-    const focus = P.statusId(location.href);
-    const a = posts.get(focus);
-    const b = posts.get(id);
-    if (a?.conversation && b?.conversation) return a.conversation === b.conversation ? "conversation" : "independent";
-    let current = b;
-    for (let depth = 0; current && depth < 100; depth++) {
-      if (current.parent === focus) return "conversation";
-      current = posts.get(current.parent);
+    for (const candidate of items.values()) {
+      if (candidate === item || (item.kind === "image" && candidate.kind === "image" && !candidate.isViewer &&
+          candidate.group === item.group)) authorize(candidate, true);
     }
-    current = a;
-    for (let depth = 0; current && depth < 100; depth++) {
-      if (current.parent === id) return "conversation";
-      current = posts.get(current.parent);
-    }
-    return null;
-  }
-  function category(item) {
-    const focus = P.statusId(location.href);
-    if (focus && !contextReady && item.postId !== focus) return null;
-    return P.classify({focusId: focus, focusAuthor, postId: item.postId, postAuthor: item.author,
-      relationship: relationship(item.postId)});
-  }
-  function descriptor(element) {
-    if (element.matches('[data-testid="swipe-to-dismiss"]') &&
-        (!P.statusId(location.href) || /\/photo\/\d+$/.test(location.pathname))) return null;
-    const article = element.closest('article[data-testid="tweet"]');
-    let owner = outerPost(article);
-    // Media grids and viewers may not contain an article. Their status link is an item boundary.
-    const link = element.closest('a[href*="/status/"]');
-    const linkedId = link && P.statusId(link.href);
-    if (!owner && linkedId) owner = {id: linkedId, author: posts.get(linkedId)?.author || null};
-    if (!owner) {
-      const dialog = element.closest('[role="dialog"]');
-      const focus = P.statusId(location.href);
-      if (dialog && focus) owner = {id: focus, author: posts.get(focus)?.author || focusAuthor};
-    }
-    if (!owner) return null;
-    const possibleQuote = element.closest('[role="link"]:not(a)');
-    const quoteScope = possibleQuote?.querySelector('[data-testid="User-Name"]') ? possibleQuote : null;
-    const ownerMetadata = posts.get(owner.id);
-    const img = element.querySelector("img");
-    const domPoster = P.mediaURL(img?.getAttribute("src"), "image") || P.mediaURL(element.querySelector("video")?.poster, "image");
-    let attachmentPost = linkedId || (quoteScope && ownerMetadata?.quote) || owner.id;
-    // A quoted video may have a play button but no photo/status anchor.
-    if (!linkedId && domPoster) {
-      if (ownerMetadata?.media.some(entry => P.sameAsset(entry.poster, domPoster))) attachmentPost = owner.id;
-      else if (ownerMetadata?.quote && posts.get(ownerMetadata.quote)?.media.some(entry => P.sameAsset(entry.poster, domPoster))) attachmentPost = ownerMetadata.quote;
-    }
-    const siblings = [...(quoteScope || article || element.closest('[role="dialog"]') || element.parentElement).querySelectorAll(selector)]
-      .filter(e => !e.parentElement?.closest(selector));
-    const isViewer = element.matches('[data-testid="swipe-to-dismiss"]');
-    const linkIndex = (isViewer ? location.pathname : link?.pathname)?.match(/\/(?:photo|video)\/(\d+)/)?.[1];
-    const metadata = posts.get(attachmentPost)?.media || [];
-    const mediaIndex = linkIndex ? Number(linkIndex) - 1 : Math.max(0, siblings.indexOf(element));
-    if (mediaIndex < 0) return null;
-    const cached = items.get(element);
-    const poster = domPoster ||
-      metadata[mediaIndex]?.poster || (cached?.postId === owner.id && cached.attachmentPost === attachmentPost && cached.mediaIndex === mediaIndex ? cached.poster : null);
-    let attachment = metadata.find(entry => P.sameAsset(entry.poster, poster));
-    const kind = attachment?.type === "video" || attachment?.type === "animated_gif" || /\/(?:amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\//.test(poster) || element.querySelector('video, [data-testid="playButton"]') ? "video" : "image";
-    const mediaId = attachment?.mediaId || null;
-    let video = attachment?.video || null;
-    if (!video && kind === "video") video = P.mediaURL(element.querySelector("video")?.getAttribute("src"), "video");
-    const surface = element.closest('[role="dialog"]') ? "dialog" : element.closest('[data-testid="primaryColumn"]') ? "primary" : "page";
-    const region = element.closest('[role="region"]')?.getAttribute("aria-labelledby") || "none";
-    const base = [owner.id, surface, region, attachmentPost, mediaIndex, poster ? P.assetKey(poster) : "unresolved"].join("|") +
-      (kind === "video" && mediaId ? "|video:" + mediaId : "");
-    const boundary = article || link || element.closest('[role="dialog"]') || element;
-    const stamp = boundary.getAttribute("aria-labelledby") || boundary.getAttribute("href") || "";
-    const cell = boundary.closest('[data-testid="cellInnerDiv"]') || boundary.parentElement;
-    let record = articleIds.get(boundary);
-    if (!record || record.postId !== owner.id || record.stamp !== stamp || record.cell !== cell) {
-      record = {nonce: ++articleSequence, postId: owner.id, stamp, cell, stable: null, requested: false};
-      articleIds.set(boundary, record);
-    }
-    if (metadataPort && !record.requested && pendingIdentities.size < 200) {
-      record.requested = true;
-      const marker = crypto.randomUUID();
-      boundary.setAttribute("data-xmf-identity", marker);
-      pendingIdentities.set(marker, {element: boundary, record});
-      metadataPort.postMessage({type: "identity", marker, postId: owner.id});
-    }
-    return {postId: owner.id, author: owner.author, poster, video, mediaId, kind, base,
-      occurrence: record.stable || "dom:" + record.nonce, boundaryNonce: record.nonce, attachmentPost, mediaIndex};
   }
   function make(element, desc) {
-    const host = document.createElement("xmf-slot");
-    const shadow = host.attachShadow({mode: "open"});
+    const host = document.createElement("xmf-slot"), shadow = host.attachShadow({mode: "open"});
     const style = document.createElement("style");
-    style.textContent = ':host{display:block;width:100%;height:100%;color-scheme:light dark}button{box-sizing:border-box;width:100%;height:100%;min-height:80px;border:0;border-radius:12px;background:#15202b;color:#f5f7f8;font:600 14px/1.5 system-ui;padding:16px;cursor:pointer}button:hover{background:#223746}button:focus-visible{outline:3px solid #60e0a7;outline-offset:-5px}iframe{width:100%;height:100%;border:0;border-radius:12px;display:block}';
-    const button = document.createElement("button");
-    button.type = "button";
-    const item = {...desc, localIdentity: crypto.randomUUID(), id: crypto.randomUUID(), identity: desc.base + "|" + desc.occurrence, element, host, shadow, style, button, frame: null, pending: false};
-    host.addEventListener("click", event => { if (!item.imageReady) event.stopPropagation(); });
+    style.textContent = ':host{display:block;width:100%;height:100%;color-scheme:dark}button{box-sizing:border-box;width:100%;height:100%;min-height:80px;border:0;border-radius:12px;background:#15202b;color:#f5f7f8;font:600 14px/1.5 system-ui;padding:16px;cursor:pointer}button:hover{background:#223746}button:focus-visible{outline:3px solid #60e0a7;outline-offset:-5px}iframe{width:100%;height:100%;border:0;border-radius:12px;display:block}';
+    const button = document.createElement("button"); button.type = "button";
+    const item = {...desc, element, host, shadow, style, button, id: crypto.randomUUID(),
+      manual: false, frame: null, pending: false, imageReady: false, presentation: {}};
+    button.textContent = blockedLabel(item);
     button.addEventListener("click", event => {
       event.preventDefault(); event.stopPropagation();
       if (event.isTrusted) activate(item);
     });
-    for (const type of ["pointerdown", "mousedown", "keydown"]) host.addEventListener(type, event => {
+    for (const type of ["click", "pointerdown", "mousedown", "keydown"]) host.addEventListener(type, event => {
       if (!item.imageReady) event.stopPropagation();
     });
-    if (getComputedStyle(element).position === "static") element.style.position = "relative";
-    element.setAttribute("data-xmf-covered", "");
+    if (!item.isViewer) {
+      const set = (name, value) => {
+        item.presentation[name] = {original: element.style[name], applied: value}; element.style[name] = value;
+      };
+      if (getComputedStyle(element).position === "static") set("position", "relative");
+      if (element.getBoundingClientRect().height < 80) {
+        set("display", "block");
+        const width = element.getBoundingClientRect().width;
+        const height = desc.width && desc.height ? width * desc.height / desc.width : 160;
+        set("minHeight", Math.max(80, Math.min(height, innerHeight * .8)) + "px");
+      }
+      element.setAttribute("data-xmf-covered", "");
+    }
     shadow.append(style, button); element.append(host); items.set(element, item);
-    reset(item);
+    return item;
+  }
+  function descriptor(desc) {
+    const {attachmentPost} = desc;
+    const boundary = desc.article || desc.element;
+    let record = boundaries.get(boundary);
+    if (!record || record.postId !== desc.postId) {
+      record = {postId: desc.postId, nonce: ++sequence}; boundaries.set(boundary, record);
+    }
+    return {...desc, attachmentPost, group: attachmentPost ? record.nonce + "|" + attachmentPost : desc.element,
+      base: [desc.postId, attachmentPost, desc.mediaIndex, P.assetKey(desc.poster), P.assetKey(desc.video), desc.kind, desc.mediaId, record.nonce].join("|")};
+  }
+  function updateItem(element, desc) {
+    let item = items.get(element);
+    if (item && item.base !== desc.base) { dispose(item); item = null; }
+    if (!item) return make(element, desc);
+    Object.assign(item, desc);
+    if (!item.host.isConnected) element.append(item.host);
     return item;
   }
   function scan(root) {
-    const elements = [];
-    if (root.matches?.(selector)) elements.push(root);
-    elements.push(...root.querySelectorAll(selector));
-    for (const element of elements) {
-      // tweetPhoto can wrap a videoPlayer: one UI and grant for that attachment.
-      if (element.parentElement?.closest(selector)) continue;
-      const desc = descriptor(element);
-      let item = items.get(element);
-      if (!desc) {
-        if (item) { reset(item); item.host.remove(); element.removeAttribute("data-xmf-covered"); items.delete(element); }
-        continue;
-      }
-      if (item && (item.base !== desc.base || item.kind !== desc.kind || item.boundaryNonce !== desc.boundaryNonce)) {
-        reset(item); item.host.remove(); items.delete(element); item = null;
-      }
-      if (!item) item = make(element, desc);
-      else {
-        Object.assign(item, desc);
-        if (!item.host.isConnected) element.append(item.host);
-      }
-      if (item.postId === P.statusId(location.href)) {
-        contextReady = true;
-        if (item.author && focusAuthor !== item.author) { focusAuthor = item.author; queue(document); }
-      }
-      for (const video of element.querySelectorAll("video")) {
-        video.pause(); video.removeAttribute("autoplay");
-        if (video.hasAttribute("src")) { video.removeAttribute("src"); video.load(); }
-      }
+    const found = new Set();
+    for (const raw of XMFAdapter.scan(root, posts)) {
+      const desc = descriptor(raw), element = desc.element;
+      found.add(element);
+      updateItem(element, desc);
+      for (const video of element.querySelectorAll("video")) { video.pause(); video.removeAttribute("autoplay"); }
+    }
+    for (const item of items.values()) {
+      if (!item.isViewer && (root === document || root === item.element || root.contains?.(item.element)) && !found.has(item.element)) dispose(item);
     }
   }
+  function galleryEntries(postId, fallback = []) {
+    const metadata = posts.get(postId)?.media;
+    return metadata ? metadata.flatMap((entry, mediaIndex) => entry.type === "photo" && entry.poster
+      ? [{poster: entry.poster, mediaIndex}] : []) : fallback;
+  }
+  function openViewer(source, selectedIndex, direct = false, opener = null) {
+    closeViewer(false);
+    const fallback = source.fallback || [];
+    const entries = galleryEntries(source.attachmentPost, fallback);
+    let index = entries.findIndex(entry => entry.mediaIndex === selectedIndex);
+    if (index < 0) { entries.splice(0, entries.length, {poster: null, mediaIndex: selectedIndex}); index = 0; }
+    const surface = {...source, direct, fallback, entries, index, allowed: new Set(), nonce: ++sequence};
+    surface.ui = XMFViewer.create({opener, onSelect: selectViewer, onClose: () => closeViewer(true)});
+    viewerSurface = surface;
+    if (source.inheritManual) for (const entry of entries) if (entry.poster) surface.allowed.add(imageKey(entry));
+    syncViewer(); queue(null);
+  }
+  function selectViewer(index) {
+    if (!viewerSurface || !Number.isInteger(index) || index < 0 || index >= viewerSurface.entries.length) return;
+    viewerSurface.index = index; syncViewer(); queue(null);
+  }
+  function closeViewer(restoreFocus = true) {
+    const surface = viewerSurface;
+    if (!surface) return;
+    viewerSurface = null;
+    const item = items.get(surface.ui.stage);
+    if (item) dispose(item);
+    surface.ui.destroy({restoreFocus});
+    queue(null);
+    if (surface.direct) {
+      dismissedViewerURL = location.href;
+      if (restoreFocus) location.replace(location.href.replace(/\/photo\/\d+\/?(?=[?#]|$)/, ""));
+    }
+  }
+  function syncViewer() {
+    const directIndex = location.pathname.match(/\/photo\/(\d+)\/?$/)?.[1];
+    if (!viewerSurface && directIndex && dismissedViewerURL !== location.href && document.documentElement) {
+      const id = P.statusId(location.href);
+      if (id) openViewer({postId: id, attachmentPost: id}, Number(directIndex) - 1, true);
+      return;
+    }
+    const surface = viewerSurface;
+    if (!surface) return;
+    const selected = surface.entries[surface.index];
+    const fresh = galleryEntries(surface.attachmentPost, surface.fallback);
+    const index = fresh.findIndex(entry => entry.mediaIndex === selected.mediaIndex);
+    if (index >= 0) { surface.entries = fresh; surface.index = index; }
+    else surface.entries[surface.index] = {poster: null, mediaIndex: selected.mediaIndex};
+    const entry = surface.entries[surface.index];
+    const desc = {isViewer: true, postId: surface.postId, attachmentPost: surface.attachmentPost,
+      poster: entry.poster, mediaIndex: entry.mediaIndex, video: null, mediaId: null, kind: "image",
+      imageCount: surface.entries.length,
+      base: [surface.nonce, entry.mediaIndex, P.assetKey(entry.poster)].join("|")};
+    const item = updateItem(surface.ui.stage, desc);
+    if (surface.allowed.has(imageKey(entry))) item.manual = true;
+    surface.ui.update({index: surface.index, count: surface.entries.length});
+  }
+  function visible(item) {
+    if (item.isViewer) return true;
+    if (viewerSurface) return false;
+    const box = item.element.getBoundingClientRect();
+    return box.width > 0 && box.height > 0 && box.top < innerHeight + 300 && box.bottom > -300;
+  }
   function queue(root) {
-    dirty.add(root);
+    if (root) dirty.add(root);
     if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
   }
   function flush() {
     scheduled = false; context();
     const roots = dirty.has(document) ? [document] : [...dirty]; dirty.clear();
-    // Resolve a text-only focused post as well as one with attachments.
-    if ((!focusAuthor || !contextReady) && P.statusId(location.href)) {
-      for (const article of document.querySelectorAll('article[data-testid="tweet"]')) {
-        const owner = outerPost(article);
-        if (owner?.id === P.statusId(location.href)) { contextReady = true; focusAuthor = owner.author; break; }
-      }
-      focusAuthor ||= posts.get(P.statusId(location.href))?.author || null;
-    }
-    for (const root of roots) if (root && (root === document || root.isConnected)) scan(root);
+    for (const root of roots) if (root === document || root?.isConnected) scan(root);
     syncViewer();
-    const identities = new Map();
-    const imageGroups = new Map();
-    for (const [element, item] of items) {
-      if (!element.isConnected) { reset(item); element.removeAttribute("data-xmf-covered"); items.delete(element); continue; }
-      if (item.kind === "image") {
-        const key = item.boundaryNonce + "|" + item.attachmentPost;
-        if (!imageGroups.has(key)) imageGroups.set(key, []);
-        imageGroups.get(key).push(item);
-      }
-      const identity = item.base + "|" + item.occurrence;
-      if (!identities.has(identity)) identities.set(identity, []);
-      identities.get(identity).push(item);
-    }
-    for (const group of imageGroups.values()) for (const item of group) {
-      item.imageCount = item.isViewer
-        ? (posts.get(item.attachmentPost)?.media || []).filter(media => media.type === "photo" && media.poster).length
-        : group.length;
-      if (!item.pending && !item.frame && item.button.textContent.includes(" blocked — "))
-        item.button.textContent = blockedLabel(item);
-    }
-    for (const [proposed, group] of identities) {
-      if (group.length > 1) { ambiguousIdentities.add(proposed); manual.delete(proposed); }
-      const ambiguous = ambiguousIdentities.has(proposed);
-      for (const item of group) {
-        const identity = ambiguous ? item.base + "|element:" + item.localIdentity : proposed;
-        // Upgrade this existing DOM occurrence only; never merge two occurrences by URL.
-        if (!ambiguous && item.identity !== identity && manual.has(item.identity)) {
-          manual.set(identity, manual.get(item.identity)); manual.delete(item.identity);
-          if (viewerIdentities.delete(item.identity)) viewerIdentities.add(identity);
-        }
-        item.identity = identity;
-        inheritViewer(item);
-        const cat = category(item);
-        item.host.dataset.category = cat || "unknown";
-        item.host.dataset.identity = item.occurrence.startsWith("react:") && !ambiguous ? "stable" : "document";
-        item.host.dataset.ready = String(!!(item.kind === "video" ? item.video : item.poster));
-        if (manual.has(identity)) manual.set(identity, cat);
-        if ((item.frame || item.pending) && item.workerCategory !== cat) {
-          item.workerCategory = cat; post({type: "category", id: item.id, epoch, category: cat});
-        }
-        if (!manual.has(identity) && P.blocked(settings, cat) && (item.frame || item.pending)) reset(item);
-        if ((manual.has(identity) || !P.blocked(settings, cat)) && visible(item.element)) authorize(item);
+    const groups = new Map();
+    for (const item of items.values()) {
+      if (!item.element.isConnected) { dispose(item); continue; }
+      if (item.kind === "image" && !item.isViewer) {
+        groups.set(item.group, (groups.get(item.group) || 0) + 1);
       }
     }
-    for (const [marker, entry] of pendingIdentities) if (!entry.element.isConnected) pendingIdentities.delete(marker);
-    if (ambiguousIdentities.size > 2000) { manual.clear(); ambiguousIdentities.clear(); }
-  }
-  function visible(element) {
-    const box = element.getBoundingClientRect();
-    return box.width > 0 && box.height > 0 && box.top < innerHeight + 300 && box.bottom > -300;
+    for (const item of items.values()) {
+      if (!item.isViewer && item.kind === "image") item.imageCount = groups.get(item.group);
+      const cat = category(item);
+      item.host.dataset.category = cat || "unknown";
+      item.host.dataset.post = item.postId || "";
+      item.host.dataset.attachment = item.attachmentPost || "";
+      item.host.dataset.index = item.mediaIndex == null ? "" : String(item.mediaIndex);
+      item.host.dataset.ready = String(!!(item.kind === "video" ? item.video && P.videoMatchesPoster(item.poster, item.video, item.mediaId) : item.poster));
+      if (!item.pending && !item.frame && item.button.textContent.includes(" blocked — ")) item.button.textContent = blockedLabel(item);
+      if ((item.frame || item.pending) && item.workerCategory !== cat) {
+        item.workerCategory = cat; post({type: "category", id: item.id, epoch, category: cat});
+      }
+      if (!item.manual && P.blocked(settings, cat) && (item.frame || item.pending)) reset(item);
+      if ((item.manual || !P.blocked(settings, cat)) && visible(item)) authorize(item);
+    }
   }
   function imageState(event) {
-    if (!event.isTrusted || event.origin !== new URL(chrome.runtime.getURL("/")).origin ||
-        event.data?.type !== "xmf-image-state" || typeof event.data.ready !== "boolean") return;
+    if (!event.isTrusted || event.origin !== new URL(chrome.runtime.getURL("/")).origin) return;
     const item = [...items.values()].find(item => item.kind === "image" && item.frame?.contentWindow === event.source);
     if (!item || !item.element.isConnected) return;
+    if (event.data?.type === "xmf-viewer-key" && item.isViewer && ["ArrowLeft", "ArrowRight", "Escape"].includes(event.data.key)) {
+      if (event.data.key === "Escape") closeViewer(true);
+      else selectViewer(viewerSurface.index + (event.data.key === "ArrowLeft" ? -1 : 1));
+      return;
+    }
+    if (event.data?.type !== "xmf-image-state" || typeof event.data.ready !== "boolean") return;
     item.imageReady = event.data.ready;
-    // Changing tab order does not move focus out of an already focused renderer.
     if (item.imageReady && item.shadow.activeElement === item.frame) {
-      const target = item.element.closest('a[href*="/photo/"]') ||
-        item.element.closest('[role="dialog"]')?.querySelector('button[aria-label="Close"]');
+      const target = item.isViewer ? viewerSurface?.ui.closeButton : item.element.closest('a[href*="/photo/"]');
       target?.focus({preventScroll: true});
     }
-    // Only decoded images pass input through; loading errors retain the renderer's Retry button.
     item.frame.style.pointerEvents = item.imageReady ? "none" : "auto";
     item.frame.tabIndex = item.imageReady ? -1 : 0;
   }
-  // Keep X's real anchor and event handlers in charge of clicks, keyboard and history.
+  function observeMetadata(data) {
+    if (!Array.isArray(data?.posts)) return;
+    for (const raw of data.posts.slice(0, 500)) {
+      if (!raw || typeof raw.id !== "string" || !/^\d{1,25}$/.test(raw.id)) continue;
+      const previous = posts.get(raw.id);
+      const media = raw.media === undefined ? previous?.media || [] : (Array.isArray(raw.media) ? raw.media : []).slice(0, 16).map((entry, index) => {
+        const poster = P.mediaURL(entry?.poster, "image");
+        const old = previous?.media[index];
+        const key = typeof entry?.key === "string" && entry.key.length > 0 && entry.key.length <= 100 ? entry.key : null;
+        const same = P.sameAsset(poster, old?.poster) &&
+          (entry?.key === undefined || (key !== null && key === old?.key));
+        const type = entry?.type === undefined && same ? old.type
+          : ["photo", "video", "animated_gif"].includes(entry?.type) ? entry.type : null;
+        const compatible = same && type === old.type;
+        const mediaId = entry?.mediaId === undefined && compatible ? old.mediaId
+          : typeof entry?.mediaId === "string" && /^\d{1,25}$/.test(entry.mediaId) ? entry.mediaId : null;
+        const candidate = entry?.variants === undefined && compatible && mediaId === old.mediaId ? old.video
+          : P.chooseVideo(entry?.variants, poster, mediaId)?.url;
+        return {poster, mediaId, type, key: entry?.key === undefined && same ? old.key ?? null : key,
+          video: P.videoMatchesPoster(poster, candidate, mediaId) ? candidate : null};
+      });
+      const numeric = key => raw[key] === undefined ? previous?.[key] || null
+        : typeof raw[key] === "string" && /^\d{1,25}$/.test(raw[key]) ? raw[key] : null;
+      const author = raw.author === undefined ? previous?.author || null
+        : typeof raw.author === "string" && /^[A-Za-z0-9_]{1,15}$/.test(raw.author) ? raw.author.toLowerCase() : null;
+      posts.delete(raw.id);
+      posts.set(raw.id, {id: raw.id, author, conversation: numeric("conversation"),
+        parent: numeric("parent"), quote: numeric("quote"), media});
+    }
+    while (posts.size > 2000) posts.delete(posts.keys().next().value);
+    queue(document);
+  }
+
+  // Document lifecycle and trusted input. Website rendering internals are not an interface.
   document.addEventListener("click", event => {
-    if (!event.isTrusted || event.defaultPrevented || event.button !== 0 ||
-        event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (!event.isTrusted || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest?.('a[href*="/photo/"]');
     if (!link) return;
     context(); dirty.add(document); flush();
-    const item = [...items.values()].find(item => item.element.closest("a") === link && item.imageReady);
-    if (item) prepareViewer(item, link);
+    const item = [...items.values()].find(item => !item.isViewer && item.element.closest("a") === link && item.imageReady);
+    if (!item) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    const fallback = [...items.values()].filter(candidate => !candidate.isViewer && candidate.kind === "image" && candidate.poster &&
+      candidate.group === item.group)
+      .map(candidate => ({poster: candidate.poster, mediaIndex: candidate.mediaIndex}));
+    openViewer({postId: item.postId, attachmentPost: item.attachmentPost,
+      fallback, inheritManual: item.manual}, item.mediaIndex, false, link);
+  }, true);
+  // Intercept before X's window-level shortcuts can navigate behind the modal.
+  addEventListener("keydown", event => {
+    if (!viewerSurface || !event.isTrusted) return;
+    event.stopImmediatePropagation();
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (["ArrowLeft", "ArrowRight", "Escape"].includes(event.key)) {
+      event.preventDefault();
+      if (event.key === "Escape") closeViewer(true);
+      else selectViewer(viewerSurface.index + (event.key === "ArrowLeft" ? -1 : 1));
+    }
   }, true);
   addEventListener("message", imageState);
   const bridgeNonce = crypto.randomUUID();
@@ -512,18 +396,7 @@
     event.stopImmediatePropagation();
     if (metadataPort || event.data.nonce !== bridgeNonce) { event.ports[0].close(); return; }
     metadataPort = event.ports[0];
-    metadataPort.onmessage = event => {
-      const data = event.data;
-      if (data?.type === "identity") {
-        const entry = pendingIdentities.get(data.marker);
-        pendingIdentities.delete(data.marker);
-        if (!entry || !entry.element.isConnected || articleIds.get(entry.element) !== entry.record) return;
-        if (Array.isArray(data.keys) && data.keys.length <= 16 && data.keys.every(key => typeof key === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(key)) &&
-            data.keys.some(key => key.split(/[^0-9]+/).includes(entry.record.postId))) entry.record.stable = "react:" + data.keys.join("/");
-        queue(entry.element);
-      } else observeMetadata(data);
-    };
-    queue(document);
+    metadataPort.onmessage = event => observeMetadata(event.data);
   });
   function readyBridge(attempt = 0) {
     if (metadataPort) return;
@@ -531,27 +404,6 @@
     if (attempt < 5) setTimeout(() => readyBridge(attempt + 1), 50 * (attempt + 1));
   }
   readyBridge();
-  function observeMetadata(data) {
-    if (!Array.isArray(data?.posts)) return;
-    for (const raw of data.posts.slice(0, 500)) {
-      if (!raw || !/^\d{1,25}$/.test(raw.id) || !Array.isArray(raw.media)) continue;
-      const media = [];
-      for (const entry of raw.media.slice(0, 16)) {
-        const poster = P.mediaURL(entry?.poster, "image");
-        const mediaId = typeof entry?.mediaId === "string" && /^\d{1,25}$/.test(entry.mediaId) ? entry.mediaId : null;
-        // Preserve attachment ordinals: dropping a malformed entry would shift /photo/N.
-        media.push({poster, mediaId, video: P.chooseVideo(entry?.variants, poster, mediaId)?.url || null,
-          type: ["photo", "video", "animated_gif"].includes(entry?.type) ? entry.type : null});
-      }
-      posts.delete(raw.id);
-      posts.set(raw.id, {id: raw.id, author: typeof raw.author === "string" && /^[A-Za-z0-9_]{1,15}$/.test(raw.author) ? raw.author.toLowerCase() : null,
-        conversation: /^\d{1,25}$/.test(raw.conversation) ? raw.conversation : null,
-        parent: /^\d{1,25}$/.test(raw.parent) ? raw.parent : null,
-        quote: /^\d{1,25}$/.test(raw.quote) ? raw.quote : null, media});
-    }
-    while (posts.size > 2000) posts.delete(posts.keys().next().value);
-    queue(document);
-  }
   chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     if (sender.id !== chrome.runtime.id || msg?.type !== "xmf-context") return;
     context();
@@ -561,27 +413,21 @@
     context();
     for (const record of records) {
       const root = record.target.nodeType === 1 ? record.target : record.target.parentElement;
-      if (root?.closest("xmf-slot")) continue;
-      const article = root?.closest('article[data-testid="tweet"]');
-      if (article) queue(article);
-      else if (root) queue(root);
+      if (root?.closest("xmf-slot,xmf-gallery")) continue;
+      if (root) queue(root.closest("article") || root.closest('a[href*="/status/"]') || root);
     }
   });
-  observer.observe(document, {childList: true, subtree: true, attributes: true, attributeFilter: ["src", "poster", "href", "data-testid", "aria-labelledby"]});
+  observer.observe(document, {childList: true, subtree: true, attributes: true,
+    attributeFilter: ["src", "srcset", "poster", "href", "width", "height"]});
   navigation?.addEventListener("currententrychange", context);
   addEventListener("popstate", context);
   addEventListener("scroll", () => queue(null), {passive: true});
   addEventListener("pagehide", () => {
-    manual.clear(); ambiguousIdentities.clear(); viewerHandoff = null; clearViewerGrants(); epoch = crypto.randomUUID();
-    removeViewerSurface();
-    for (const item of items.values()) reset(item);
+    closeViewer(false); epoch = crypto.randomUUID();
+    for (const item of items.values()) { item.manual = false; reset(item); }
     port?.disconnect();
   });
   addEventListener("pageshow", () => { context(); if (!port) connect(); queue(document); });
-  setInterval(() => {
-    context();
-    if (!port) connect();
-    post({type: "alive"});
-  }, 20000);
+  setInterval(() => { context(); if (!port) connect(); post({type: "alive"}); }, 20000);
   context(); connect(); queue(document);
 })();

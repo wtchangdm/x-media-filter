@@ -304,6 +304,59 @@ test("a player without a grant receives no media URL", async () => {
   assertStopped(player);
 });
 
+test("pending capacity denials identify the item and recover after a slot is revoked", async () => {
+  const h = harness();
+  const port = await coordinator(h);
+  const tab = deferred();
+  h.setTabReader(() => tab.promise);
+  const pending = Array.from({ length: 300 }, (_, i) => grant(port, { id: `pending-${i}` }));
+  await flush();
+  assert.equal(h.tabReads.length, 300);
+  await grant(port, { id: "retry" });
+  assert.deepEqual(port.ofType("denied"), [{ type: "denied", id: "retry", epoch: "page-1" }]);
+  assert.equal(h.tabReads.length, 300);
+
+  // Replacing an existing pending ID must not consume a new capacity slot.
+  const replacement = grant(port, { id: "pending-1" });
+  await port.send({ type: "revoke", id: "pending-0" });
+  const retry = grant(port, { id: "retry" });
+  tab.resolve({ id: 1, url: routeURL });
+  await Promise.all([...pending, replacement, retry]);
+  assert.equal(port.ofType("ticket").length, 300);
+  assert.equal(port.ofType("ticket").filter(message => message.id === "pending-1").length, 1);
+  assert.equal(port.ofType("ticket").some(message => message.id === "pending-0"), false);
+  const recovered = port.ofType("ticket").find(message => message.id === "retry");
+  assert.ok(recovered);
+  assertLoad(await redeem(h, recovered.token));
+});
+
+test("concurrent grants cannot exceed 300 live items, while replacement and retry remain possible", async () => {
+  const h = harness();
+  const port = await coordinator(h);
+  const original = await ticket(port, { id: "item-0" });
+  for (let i = 1; i < 299; i++) await ticket(port, { id: `item-${i}` });
+  const active = await redeem(h, original);
+  const tab = deferred();
+  h.setTabReader(() => tab.promise);
+  const pending = ["last-1", "last-2"].map(id => grant(port, { id }));
+  await flush();
+  assert.equal(h.tabReads.length, 302);
+  tab.resolve({ id: 1, url: routeURL });
+  await Promise.all(pending);
+  assert.equal(port.ofType("ticket").length, 300);
+  const denied = port.ofType("denied");
+  assert.equal(denied.length, 1);
+  assert.ok(["last-1", "last-2"].includes(denied[0].id));
+
+  const replacement = await ticket(port, { id: "item-0" });
+  assert.deepEqual(active.messages.at(-1), { type: "stop" });
+  assertLoad(await redeem(h, replacement));
+  await grant(port, { id: denied[0].id });
+  assert.equal(port.ofType("denied").length, 2, "replacement must not free a slot");
+  await port.send({ type: "revoke", id: "item-1" });
+  assertLoad(await redeem(h, await ticket(port, { id: denied[0].id })));
+});
+
 test("a ticket can be redeemed only once, including concurrent player ports", async () => {
   const h = harness();
   const port = await coordinator(h);

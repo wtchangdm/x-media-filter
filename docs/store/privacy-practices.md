@@ -1,6 +1,6 @@
 # Privacy practices — submission draft
 
-Based on **0.1.3 source code**. These are draft disclosures for publisher review, not a record of dashboard certifications. Local-only processing still requires disclosure; no developer backend does not mean no user data is handled.
+Draft disclosures for the **current source**, not dashboard certifications. Reconcile them with the verified package under the [release gates](README.md#release-gates). Local-only processing still requires disclosure; no developer backend does not mean no user data is handled.
 
 ## Single purpose — paste copy
 
@@ -15,7 +15,7 @@ Control downloads of recognized X post images and videos using three category fi
 | Host permissions | x.com and its subdomains support document-start post/media discovery, focused-post classification and local placeholders. pbs.twimg.com supplies recognized images/posters; video.twimg.com supplies a validated selected progressive MP4. These CDN permissions also scope the renderer's redirect guard. No arbitrary destination proxy, all-sites access or authentication-header forwarding is provided. |
 | Remote code | No. All executable JavaScript, HTML and CSS are packaged with the extension. X API responses are treated as data, not executable instructions. Selected CDN images/video are media, not remote code. No eval, remote script imports, CDN libraries or remotely supplied executable configuration is used. |
 
-Sources: `extension/manifest.json`, `rules.json`, `worker.js`, `bridge.js`, `content.js`, `player.js` and `popup.js`. Calling `chrome.tabs.get/sendMessage` does not itself require adding the broad `tabs` permission; existing X host access scopes the current-page checks. No permission changes are proposed.
+The [manifest](../../extension/manifest.json) is the permission source of truth. Calling `chrome.tabs.get/sendMessage` does not itself require the broad `tabs` permission; existing X host access scopes current-page checks.
 
 ## Data usage — conservative category mapping
 
@@ -31,50 +31,19 @@ The following is a proposed mapping for publisher review against the current das
 
 The implementation supports the three limited-use certifications: no sale/transfer outside permitted purposes, no use unrelated to the single purpose, and no creditworthiness/lending use. The publisher must verify that the final extension, policy, support practices and dashboard answers agree before making these certifications.
 
-## Filled policy and store fields
+## Policy review
 
-The GitHub-readable [PRIVACY.md](../../PRIVACY.md) has **no remaining placeholders**:
+Approve [PRIVACY.md](../../PRIVACY.md) as the authoritative disclosure of local processing, persistence/revocation, CDN recipients, GitHub hosting, voluntary support email, retention/deletion and Limited Use. Store URLs are in the [listing](listing.en.md#store-urls); account prerequisites are in the [release guide](README.md#where-to-set-up-your-chrome-web-store-account).
 
-| Field | Filled value | Basis / remaining check |
-| --- | --- | --- |
-| Public maintainer/publisher name | `wtchangdm` | Authenticated GitHub owner; use as the initial public name, not a verified legal identity. Confirm it matches the intended store publisher. |
-| Repository/homepage | https://github.com/wtchangdm/x-media-filter | Same-name public repository requested by the user. |
-| Privacy policy | https://github.com/wtchangdm/x-media-filter/blob/main/PRIVACY.md | Rendered Markdown on the default branch; no separate website required. |
-| Support | https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md | Documentation/troubleshooting, with the store's verified developer contact email for direct support/privacy requests. |
-| Effective date | 2026-10-17 | Current policy-preparation/public-source date, not a claimed store release date. |
-| License | MIT | Explicitly requested; root LICENSE is also included in the release ZIP. |
-| Price / visibility / regions | Free / public / all available store regions | Explicit user decisions, subject to platform restrictions. |
-
-The policy discloses GitHub document hosting and voluntarily emailed support messages, including sender/message/attachment processing, purpose, recipients, retention and deletion requests. It does not promise that a support message is never seen by the publisher, and does not invent a provider log-retention period. The user reports the store contact email is verified; its address and mail-provider identity were not supplied or inspected, and no personal email is added to GitHub. Review the email-processing description against the actual mailbox/provider practices before store certification and add provider-specific disclosures if needed. Account legal verification, Trader classification and any additional consent determination cannot be inferred from a GitHub profile; see [account setup and remaining approvals](README.md#where-to-set-up-your-chrome-web-store-account).
-
-## Complete disclosure checklist
-
-These subjects are already addressed in the draft policy and/or listing. The publisher should approve them rather than supply more personal information:
-
-- [ ] Single purpose and the three filters, including automatic loading with a filter OFF.
-- [ ] Local processing of the current X URL, status/post IDs, author handles, relationships, media metadata and rendered structure.
-- [ ] Local handling of placeholder activations, occurrence identities and temporary tickets/grants.
-- [ ] Only the three preferences are deliberately persisted; no browsing database or cross-device sync.
-- [ ] No developer telemetry/backend, analytics uploads, sale, advertising, unrelated transfers or credit/lending use.
-- [ ] No reading/forwarding of passwords, cookies or X authentication headers.
-- [ ] Direct HTTPS requests to the named X CDNs, which receive the media URL, IP and ordinary request information.
-- [ ] X's own traffic and Google's platform processing are separate; filtering is not anonymity or total tracking prevention.
-- [ ] Retention, revocation, uninstall behavior and the fact that downloaded bytes/browser caches cannot be undone.
-- [ ] GitHub policy/support document hosting and optional email support, including voluntarily submitted sender address/message/attachments, mail-provider processing, retention and deletion requests.
-- [ ] Limited Use statement, policy changes and a working support channel.
-- [ ] Final dashboard categories and all three data-use certifications match actual behavior.
+Review support-email recipients, retention and deletion against the actual mailbox/provider practices; add provider-specific disclosures if needed. The provider has not been inspected, and no personal email belongs in this repository. Filled policy fields do not substitute for the publisher's approval or dashboard certifications.
 
 ## In-product disclosure and consent — unresolved assessment, not a proven defect
 
 The current popup explains filtering and click-to-load. It has **no separate data-processing notice, privacy-policy link or consent gate**. The listing and policy now describe local processing, but they do not constitute an in-product consent flow.
 
-The official User Data FAQ describes prominent disclosure and affirmative consent within the product where that requirement applies. The remaining question is whether this necessary, local-only processing requires an additional flow beyond the existing functionality/permission disclosures. This preparation has not established that answer. It is not a finding that the extension is definitely prohibited or that a new consent screen is automatically required.
+The official User Data FAQ requires prominent in-product disclosure and affirmative consent where applicable. Whether this necessary local processing needs an additional flow remains unresolved; a new consent screen is not established as mandatory.
 
-If an in-product notice is required, proposed text for review is:
-
-> X Media Filter processes the current X page URL, post/author identifiers, media metadata and your media-load selections on this device to apply your filters. Only your three filter settings are saved. Eligible media is requested directly from X's media CDNs. No browsing records or analytics are sent to the developer. Read the Privacy Policy for details.
-
-If affirmative consent is also required, text alone is insufficient. The flow would need to appear **before the covered processing**, provide a clear affirmative choice and policy link, define decline/revocation behavior, and keep the network barrier fail-closed. Adding it requires an explicit implementation decision and fresh validation; it is not implemented in this documentation change.
+If required, disclose the processing described in the policy before it begins. Affirmative consent needs a clear choice and policy link, defined decline/revocation behavior, and a fail-closed network barrier, not notice text alone. Implementation requires an explicit decision and fresh validation.
 
 ## Official references
 

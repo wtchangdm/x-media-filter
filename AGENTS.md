@@ -26,4 +26,4 @@ Keep behavior changes aligned with the relevant specification/tests/docs. Put wo
 
 Runtime changes: `node --test tests/*.test.cjs` and `node tests/check.mjs` (Node.js 22+). Documentation-only changes need consistency/link checks, not a new application suite.
 
-Media/network changes also require visible-placeholder and network evidence in the user's existing Chrome, including affected startup, SPA, duplicate-asset and video-segment cases. DOM/mocks and zero Resource Timing sizes alone do not prove zero downloads. Report routes/settings and material gaps to the user; keep exact browser versions and per-run details in local evidence. Browser safety and capture handling are in the development guide.
+Media/network changes also require visible-placeholder and network evidence in the dedicated isolated Chrome/profile, including affected startup, SPA, duplicate-asset and video-segment cases. DOM/mocks and zero Resource Timing sizes alone do not prove zero downloads. Report routes/settings and material gaps to the user; keep exact browser versions and per-run details in local evidence. Browser safety and capture handling are in the development guide.

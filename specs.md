@@ -1,267 +1,189 @@
-# X Media Filter — specification and implementation handoff
+# X Media Filter — specification
 
-Status: **loadable MV3 extension 0.1.3 implemented**. Three-filter combinations, the dark-only popup and grouped loading on the supplied native three-image post are verified in the user's Chrome; defaults/migration and startup read races have offline coverage, not a fresh-profile installation claim. Current architecture and prior verification are in §10 and [docs/validation.md](docs/validation.md); the acceptance matrix remains the contract, not a claim that every surface has passed.
+The source targets **current X only**, with a semantic DOM adapter and fully extension-owned image gallery. Requirements below are not universal compatibility claims; see [measured coverage](docs/validation.md) and [release gates](docs/store/README.md#release-gates).
 
 ## Find the relevant detail
 
-- Product semantics and UI: §§1–5. Discovery provenance: §6.
-- Platform constraints and selected implementation: §§7 and 10. Acceptance gates: §8.
-- Developer commands/browser procedure: [development guide](docs/development.md). Measured coverage: [validation](docs/validation.md).
-- Store/publisher work: [release guide](docs/store/README.md); §11 records the release scope. User installation/help stays in README and SUPPORT, not this technical specification.
+- Product semantics: §§1–5. Current integration contract: §6.
+- Platform/security boundaries: §§7 and 10. Acceptance gates: §8.
+- Commands and browser safety: [development guide](docs/development.md). Coverage: [validation](docs/validation.md).
+- Store preparation: [release guide](docs/store/README.md). User installation/help: [README](README.md) and [SUPPORT](SUPPORT.md).
 
 ## 1. Goal and confirmed requirements
 
-Build a Chrome extension for **all X post surfaces**, not just individual status pages. Filtering prevents image/video downloads until authorized and shows a local placeholder instead.
+Filtering prevents unauthorized image/video downloads on X post surfaces; it does not merely hide downloaded content. Broad surface coverage is a product goal, not a claim that every current layout has passed validation.
 
-| Requirement | Agreed behavior |
+| Requirement | Behavior |
 | --- | --- |
-| Tagline | **Browse X without needing to bleach your eyes.**. Use the exact text in README and the store/manifest short description. It is branding, not a claim of automatic unpleasant-content classification. |
-| Media | Images and videos; UI wording can use “media.” |
-| Control A (`a`) | **Filter media on post**: the focused post, independent feed items, and posts on non-status surfaces. Default OFF. |
-| Control C (`c`) | **Filter media on author replies**: conversation replies and ancestors by the focused post's author. Default OFF. |
+| Tagline | **Browse X without needing to bleach your eyes.** Use this exact text in README and the store/manifest short description. It is branding, not automatic content classification. |
+| Media | Post images and videos, with local click-to-load placeholders. |
+| Control A (`a`) | **Filter media on post**: focused post and independent posts, including non-status surfaces. Default OFF. |
+| Control C (`c`) | **Filter media on author replies**: conversation replies and ancestors by the focused author. Default OFF. |
 | Control B (`b`) | **Filter media on non-author comments**: conversation replies and ancestors by other authors. Default ON. |
-| Author reference | On a status page, use the author of the post identified by the **current URL**, not the first author in the conversation. |
-| Scope | All post surfaces, including home timelines, search, and profile timelines. |
-| Controls | Three toggles with the exact English labels above, in a dark-only toolbar popup with no footer. Switch styling follows the supplied reference. |
-| Manual load | An image click loads all still images belonging to the same attachment post in the same rendered occurrence; a video click loads only that video. No quote/neighbor/other-occurrence/tab/video spillover from an image click. Each image requires a separate validated loader ticket. |
-| Defaults | A OFF, C OFF, B ON. ON means blocking is enabled. Keep startup blocked until settings have been read. |
-| Persistence | Save settings locally, share them across X tabs, and retain them across Chrome restarts. Legacy saved `{a,b}` maps to `{a,c:a,b}`, preserving old preferences. No cross-device sync requirement. |
-| Artwork | Use the supplied `Grumpy Cat Rubbing Its Eye.png` as the icon source. Preserve marquee assets outside the extension in `assets/store/`. Local public-store preparation is authorized; submission/publication and rights approval are not completed. |
-| Validation | The user authorizes testing through their Chrome debug session at `<dedicated-loopback-endpoint>`, using `agent-browser`. |
+| Focus | The status ID in the current URL determines the focused post, not article position, URL handle alone or quoted author. |
+| Popup | Exact labels above, in A/C/B order; dark-only, no footer, accessible switches and visible focus. |
+| Manual loading | A still-image click authorizes its attachment-post group in one rendered occurrence. A video click authorizes only that video. Each renderer requires a separately validated ticket. |
+| Enlargement | A fully extension-owned image gallery, not an overlay inside X's native viewer. |
+| Persistence | Save only filter settings locally and propagate across X tabs. Preserve legacy `{a,b}` as `{a,c:a,b}`. No cross-device sync. |
+| Startup | Keep automatic loading blocked until settings are read. The permanent network barrier is independent of settings reads. |
 
-Visual reference: [docs/reference/toggle.webp](docs/reference/toggle.webp), copied from the supplied CleanShot image. It shows a green rounded track and white circular thumb on the right when ON. OFF should have a neutral track and thumb on the left. The reference does not specify the popup layout.
+The [switch reference](docs/reference/toggle.webp) specifies a green rounded track and right-positioned white thumb when ON, a neutral track and left-positioned thumb when OFF. Do not rely on color alone.
 
-## 2. Working defaults for details not explicitly selected
+## 2. Working defaults
 
-These make the specification implementable without more preliminary questions. They are product defaults, not additional user quotations.
-
-- **Quoted media inherits the enclosing post's category**, regardless of the quoted author's identity. Reposts use the underlying post, not the reposter, for ownership.
-- Include animated GIFs/X animated-video attachments, video posters, and thumbnail/resolution variants of covered media. An ordinary video includes its audio track.
-- Exclude avatars, profile banners, emoji/icons, and external-link preview cards from media filtering. Keep post text, quote text, navigation, and ordinary X interactions intact.
-- “All” covers X's post UI: home/Following/For You, profiles and media grids, search, bookmarks, Lists/Communities, post-bearing notifications, conversation views, and media viewers. Promoted/recommended posts follow the same policy. DMs, Spaces/live audio, embedded X posts on other websites, and third-party video embeds are outside the initial post-media scope; supporting them would need additional semantics and verification.
-- Target desktop Chrome, Manifest V3, initially installed unpacked. Public-store release preparation is now authorized (see §11), not submission/publication. Mobile/Firefox support, backend, telemetry, extension account login, or X API credentials are not required.
-- Helper text must explain that ON blocks downloads, distinguish the three categories, and describe grouped still-image loading versus single-video loading. The English switch labels and dark-only popup are confirmed requirements in §1.
-- Click grants are temporary and local to the current tab/page context. They do not persist across a full reload, a different logical page, browser restart, or another tab.
-- A video click authorizes that one video's poster, playlists, initialization data, audio/video segments, and subsequent seeking/quality changes. Showing controls is sufficient; do not force autoplay or sound.
+- Quoted attachments inherit the enclosing post's A/C/B category, but remain a separate loading group. Reposts use the underlying post, not the reposter, for ownership.
+- Include recognized GIF/animated-video attachments, posters and thumbnail/resolution variants. A video authorization covers its audio and necessary associated requests; playback support remains limited to the transport described in §10.
+- Exclude avatars, profile banners, emoji/icons and ordinary external-link preview cards. Preserve post/quote text, navigation and unrelated X actions.
+- Intended post surfaces include home timelines, profiles/media grids, search, bookmarks, Lists/Communities, post-bearing notifications, conversations and photo routes. Promoted/recommended posts follow the same policy. Missing live fixtures remain acceptance gaps.
+- DMs, Spaces/live audio, embedded X posts on other sites and third-party video embeds are outside the initial scope.
+- Target desktop Chrome MV3. No mobile/Firefox support, backend, telemetry, extension account or X API credentials are required.
+- Click grants are temporary and occurrence-local. They do not survive a full reload, a different logical page, browser restart or another tab. A full DOM occurrence replacement also requires a new click; renderer-internal identity is not used to carry grants across replacements.
+- Show video controls without forcing autoplay or sound. Describe grouped still-image loading versus single-video loading in the UI.
 
 ## 3. Classification and state semantics
 
 ### Page context
 
-A status context is identified by the status ID in the URL, including associated `/photo/...` and `/video/...` views. Resolve that post's actual author from the rendered post or its metadata. Prefer a stable user ID; a normalized handle from a verified post-author association is a fallback. The URL handle alone is not authoritative.
+A status context comes from the current URL's status ID, including `/photo/...` and `/video/...` suffixes. Establish the corresponding author's identity from current metadata. DOM links and avatars are not an alternate author source; missing metadata remains unknown.
 
 | Rendered item | Category |
 | --- | --- |
 | Focused status post | A |
 | Conversation reply or ancestor by the focused author | C |
 | Conversation reply or ancestor by another author | B |
-| Quote attachment inside any of the above | Inherit enclosing post's A/C/B category |
-| Independent feed item, recommendation, repost, or search result outside the current conversation | A |
-| Any post on a non-status surface | A; C and B have no effect there |
+| Quoted attachment | Enclosing post's category |
+| Independent recommendation, feed item, repost or search result | A |
+| Post on a non-status surface | A; C/B have no effect |
 
-Conversation ancestors displayed above the focused post use the same author-relative C/B classification as replies. Unrelated recommendations below a conversation remain A, not C or B. A reply opened as its own status becomes the focus (A) and establishes a new author reference.
-
-Do not infer ownership from article position or nested quote links. For an unidentified relationship, withhold automatic loading if any possible category has its filter ON. If all three filters are OFF, author classification is not needed to authorize recognized post media. An explicit click can authorize an identified still-image group or video without waiting for its A/C/B classification.
+Use conversation/parent relationships, not visual ordering, to distinguish a conversation from independent recommendations. Opening a reply as its own status makes it the new focus and author reference. Unknown classification withholds automatic loading if any possible category is filtered. When all filters are OFF, author classification is unnecessary for recognized media. An explicit trusted click can authorize an identified occurrence without waiting for its category.
 
 ### Settings truth table
 
 | A (`a`) | C (`c`) | B (`b`) | Category A | Category C | Category B |
 | --- | --- | --- | --- | --- | --- |
 | ON | ON | ON | Placeholder | Placeholder | Placeholder |
-| ON | ON | OFF | Placeholder | Placeholder | Load normally |
-| ON | OFF | ON | Placeholder | Load normally | Placeholder |
-| ON | OFF | OFF | Placeholder | Load normally | Load normally |
-| OFF | ON | ON | Load normally | Placeholder | Placeholder |
-| OFF | ON | OFF | Load normally | Placeholder | Load normally |
-| OFF | OFF | ON | Load normally | Load normally | Placeholder |
-| OFF | OFF | OFF | Load normally | Load normally | Load normally |
+| ON | ON | OFF | Placeholder | Placeholder | Eligible |
+| ON | OFF | ON | Placeholder | Eligible | Placeholder |
+| ON | OFF | OFF | Placeholder | Eligible | Eligible |
+| OFF | ON | ON | Eligible | Placeholder | Placeholder |
+| OFF | ON | OFF | Eligible | Placeholder | Eligible |
+| OFF | OFF | ON | Eligible | Eligible | Placeholder |
+| OFF | OFF | OFF | Eligible | Eligible | Eligible |
 
-The fresh-install defaults are **A OFF, C OFF, B ON**. “Load normally” means eligible to load when X/the media UI needs it, not eagerly download every item in the timeline. Eligibility must work with independently selected filters; classification cannot depend on already downloading the media.
+Eligibility does not mean eagerly downloading every timeline attachment. Automatic inline loading is visibility-gated; while the gallery is open, no new inline automatic renderer is authorized.
 
 ### Changes and grants
 
-- Store three booleans (`a`, `c`, `b`) in `chrome.storage.local`. Missing/invalid values use A OFF, C OFF, B ON. For a valid legacy saved `{a,b}` pair without `c`, preserve `a`/`b` and initialize `c` from `a` instead of the fresh-install default. Keep media blocked until the asynchronous settings read completes; defaults must not authorize startup loads early. The permanent network safety baseline is independent of those reads.
-- Apply a setting change to existing and newly rendered content in all X tabs without requiring a reload. A change must not open a window in which unrelated blocked media can load.
-- Turning a category OFF makes its media eligible. Turning it ON revokes that category's existing automatic/manual authorizations, restores placeholders, and stops playback/future segment loading. Already-transferred bytes cannot be undone; cancellation of an already-sent request is best effort.
-- Keep a clicked item authorized through ordinary React rerenders and virtualization in the same page context. A recycled DOM node must not transfer authorization to a different post/media item.
-- On logical route changes, reset grants and recompute the focus. A trusted activation of a decoded image's native photo link may hand off only its authorized still-image group to that exact destination's selected viewer occurrence, including from a timeline or quote. This is not a route-wide/post-wide grant: sidebar/duplicate occurrences and other tabs remain independent. Native gallery navigation may load other authorized images in that group when selected; exiting or reloading the viewer ends the handoff.
-- An image click authorizes all still images in the same attachment post and same rendered occurrence, with an independently validated ticket for each image. Quoted and enclosing attachments are separate groups even though quotes inherit the enclosing category. Do not authorize videos, neighboring posts, or duplicate assets in other occurrences/tabs. A grant is not a global media-URL or whole-post allowlist.
-- A proposed identity includes document/tab context, logical route generation, enclosing post, quoted-media path if applicable, media identity/index, and an occurrence discriminator if the same post/media appears more than once. Resolve identity from current content; DOM nodes and CDN URLs alone are insufficient.
+- Store three booleans in `chrome.storage.local`. Missing/invalid values use fresh defaults; a valid legacy `{a,b}` without `c` initializes `c=a`. Do not reset valid saved preferences. Block automatic startup loading until the asynchronous read completes.
+- Apply setting changes to existing and newly rendered content across X tabs without a reload. OFF makes eligible media load; ON revokes affected automatic/manual authorizations and restores placeholders. Already-transferred bytes cannot be undone; cancellation of an already-sent request is best effort.
+- A still-image click authorizes still images in the same attachment post and rendered occurrence, not enclosing/quoted groups, neighbors, duplicate occurrences/tabs or videos. Grouping is not a URL/CDN/tab allowlist.
+- Retain a grant only while the same occurrence and media identity remain. A recycled node changing owner/media loses its grant. Full element removal/replacement loses the grant even if the replacement shows the same post.
+- Logical route changes reset grants and recompute context. URL changes dismiss the gallery. Inline enlargement leaves the URL unchanged and can carry only its clicked occurrence's still-image authorization into that gallery. Direct `/photo/N` entry does not inherit a grant merely from the URL.
+- Gallery selection changes dispose the old renderer and authorize only the selected image, subject to settings or that gallery's explicit group grant. Closing discards gallery grants; inline occurrence grants remain unless another revocation boundary applies.
 
 ## 4. UI behavior
 
-The popup contains the three exactly labeled switches in A, C, B order and a brief explanation, uses a dark-only theme, and has no footer. No separate image/video switches are needed. Use accessible checkbox/switch semantics, keyboard operation, visible focus, and distinguish ON/OFF by thumb position as well as color, without separate ON/OFF text beside each switch. Show persistence errors instead of pretending a change succeeded.
+Each blocked attachment has a local placeholder. Use **“Image blocked — click to load”**, **“Video blocked — click to load”**, or the grouped still-image equivalent. Keep a placeholder per attachment, distinct loading/error states and separate validated tickets. Use existing native media dimensions where available, not remote probes or previews. Keep layout bounded, text legible, placeholders borderless and keyboard focus visible.
 
-Each blocked attachment has its own local placeholder:
+A trusted click or keyboard activation loads the group/video without also navigating the post, quote or gallery. Loading/error renderers retain their own retry input. Other post interactions must remain usable.
 
-- Suggested text: **“Image blocked — click to load”** / **“Video blocked — click to load.”**
-- Use locally generated markup/CSS/icons; no remote thumbnails, blurred previews, dimension probes, or media prefetches.
-- Preserve a reasonable layout using dimensions already present in DOM/API metadata. Constrain post-media wrappers to their available link width, including the image viewer's narrow sidebar after a hard refresh. Placeholders have no decorative border; retain visible keyboard focus. Keep a placeholder per attachment in multi-image or mixed-media posts. Activating any still-image placeholder loads the remaining still images in its attachment-post/occurrence group, not videos or another attachment group.
-- Keep each image's loading/error state and validated loader ticket separate. Loading and retries must not expand authorization beyond the intended still-image group or selected video.
-- Clicking or keyboard-activating the placeholder must not also open the tweet/quote/gallery or trigger unrelated X actions. Other post interactions must continue to work.
-- Decoded images pass pointer input to X's existing photo link and preserve native keyboard navigation, viewer controls and history. Blocked/loading/error UI retains its own input handling; a placeholder click loads media without opening the viewer. If a focused image renderer finishes loading/retrying, return focus to its native photo link or viewer Close control; background loads must not steal focus. Images in the native viewer keep per-occurrence loader tickets. A direct viewer placeholder click authorizes its still-image group; one extension-owned display surface fetches only the route-selected attachment, not offscreen native slides. Videos remain playable with their existing controls. Selection never authorizes adjacent items outside the explicit still-image group. New-tab navigation does not inherit manual grants.
+A decoded inline image's unmodified primary activation opens the extension gallery, suppressing X's photo-link action. This enlargement does **not** change the URL or create a native-viewer history entry. Modified/new-tab navigation does not inherit a manual grant.
+
+The gallery is an `xmf-gallery` host with a **closed shadow root** containing a native modal `<dialog>`. The extension owns Close, Previous, Next, image count, Left/Right and Escape. The browser supplies modal focus containment; closing inline enlargement restores focus to its connected opener. Boundary navigation buttons are disabled. A focused image renderer becoming ready returns focus to the inline link or gallery Close control; background loads must not steal focus.
+
+Direct `/photo/N` startup opens the same owned gallery and selects the metadata ordinal for that post. Missing or unsupported metadata leaves a non-loading placeholder rather than selecting a different image. Close/Escape from a direct photo route uses `location.replace` to return to the base status URL, not X's native viewer or a synthetic Back operation. Previous/Next changes the owned selection without changing the URL. Only one selected gallery renderer exists; it does not prefetch adjacent slides. Existing authorized inline renderers need not be unloaded merely because the gallery opens.
+
+Native X viewer carousel stages, animations, controls and renderer internals are not integration contracts. Native swipe/drag, full-resolution zoom and image-save menus are not promised gallery features.
 
 ## 5. Meaning of “no downloading”
 
-For recognized, filtered media, **no media request may reach its origin/CDN before an explicit still-image-group/video click or applicable filter-OFF authorization**. A request attempted by X but canceled by a pre-request browser rule is acceptable. Merely hiding a successful response is not.
+For recognized, filtered media, **no media request may reach its origin/CDN before a trusted still-image-group/video click or applicable filter-OFF authorization**. A request attempted by X but canceled by a pre-request browser rule is acceptable. Hiding a successful response is not.
 
-This covers full images and thumbnails, alternate sizes/formats, video posters, GIF payloads, MP4/range requests, manifests, initialization data, and audio/video segments. HTML, JavaScript, fonts, post text, and API metadata containing media URLs/dimensions may load. The extension must not download a media payload merely to discover its type, size, or owner.
+Coverage includes images, thumbnails, alternate sizes/formats, posters, GIF payloads, MP4/range requests, manifests, initialization data and audio/video segments. HTML, JavaScript, fonts, post text and API metadata may load. Never download a media payload merely to determine its owner, type or dimensions.
 
-The guarantee begins on a fresh page load with the extension already active. Installing/enabling it after a page has loaded cannot undo previous downloads. The UI must still hide blocked content already in cache; a warm cache is not proof of network prevention.
+The guarantee begins on a fresh page load with the extension already active. Installation/enabling cannot undo previous downloads. Cached pixels still need UI suppression; a warm cache or zero Resource Timing size does not prove network prevention.
 
-The guarantee is for the supported X delivery mechanisms verified by the implementation, not an operating-system firewall. If X moves media bytes into required HTML/API responses or a new unrecognized delivery mechanism, record that gap; do not silently redefine “blocked” as CSS-hidden.
+This is a guarantee for supported delivery families, not an operating-system firewall. New hosts/paths or media bytes embedded in required HTML/API responses require renewed discovery and explicit disclosure of gaps.
 
-## 6. Discovery evidence
+## 6. Current-X integration contract
 
-### Live inspection
+The page bridge observes relevant `https://api.x.com/graphql/<hash>/<operation>` fetch/XHR responses and bounded inline JSON/bootstrap data already delivered to X. Current media records come from **`media_entities2`** and author handles from **`core.user_results.result.core.screen_name`**. Conversation, parent and quote IDs use the current `legacy` relationship fields. Do not add alternate historical media/author schemas, hard-coded GraphQL hashes or fixture IDs as compatibility fallbacks. Decode data only; never evaluate page script text.
 
-These regression fixtures were inspected through an existing Chrome session, including site-worker-controlled pages. Observed X details are not stable API contracts.
+The bridge transports sanitized updates; only the isolated coordinator merges them, in arrival order. The bridge's bounded bootstrap queue drops oldest updates on overflow, so affected media may remain unavailable until fresh metadata arrives or the page reloads.
 
-| Example | Observed behavior / regression purpose |
-| --- | --- |
-| [Image thread](https://x.com/ArtificialAnlys/status/2110893784422908225) | Focused post and three immediately following posts by the same author each contained a `pbs.twimg.com/media/...` image. Another author's reply also contained an image. Originally exercised the combined focused/same-author category and the other-author category; now a regression fixture for A, C and B separately. |
-| User-supplied three-image viewer fixture (URL intentionally omitted) | Asymmetric leading padding and lazy/recycled slides. Exercises asset-identity mapping, manual/automatic native enlargement, duplicate isolation and selected-image network windows across startup/reload/Next/Previous. |
-| Private single-photo fixture (URL intentionally omitted) | User-reported unclickable photo. X pads the single attachment with two empty SVG navigation slides, placing photo 1 at DOM index 1. Exercises direct startup/reload, manual/automatic native SPA entry, duplicate isolation and per-selection network evidence. |
-| [Four-image album](https://x.com/Cloudflare/status/2111522160153882734) | User-supplied native four-image post. Exercises image-group loading, native viewer Next/Previous, direct-viewer selection and per-selection network windows in cold and normal modes. |
-| [Custom-cover video](https://x.com/github/status/2111225205309780009) | The video has a `/media/...jpg` cover, three progressive MP4 variants and HLS. The cover has no embedded video ID. Its media entry's explicit `id_str` matches the MP4 path ID, not the enclosing tweet ID. Cold/normal browser regressions now cover this case. |
-| [Video post](https://x.com/thsottiaux/status/2111249534072529256) | Before playback, a `tweetPhoto` wrapper held a poster from `pbs.twimg.com/amplify_video_thumb/...` and a `playButton`; there was no `<video>`. After clicking Play, a `<video src="blob:...">` appeared, backed by XHR requests to `video.twimg.com`. Playback was paused after inspection. |
-| [Quoted image](https://x.com/thsottiaux/status/2111245052513259606) | The focused post was the **second** rendered tweet article because a conversation ancestor preceded it. Its quoted image linked to `/Gavmn/status/2111136119945396436/photo/1`. The quote was inside the outer article, not a nested article. Exercises focus resolution and quote inheritance. |
+Partial representations may omit established fields; only absence preserves prior same-post metadata. Explicit empty/invalid fields withdraw it. Video ID/variant reuse requires the same ordinal, canonical cover, attachment key and type, with no conflicting ID; changed or withdrawn sources revoke existing renderers.
 
-Observed DOM hooks, subject to X changes:
-
-- Tweet containers: `article[data-testid="tweet"]`.
-- Author blocks: `[data-testid="User-Name"]`; a quote can add another block with no profile `<a>`.
-- Image/poster containers: `[data-testid="tweetPhoto"]`. This does **not** mean the attachment is a still image.
-- Status links associated with `<time>` help locate the outer post; photo links can point to a quoted post instead.
-- The quoted image used `/media/<id>?format=...&name=...`, with no `srcset` in that sample. Other images must still be tested for responsive sources and alternate formats.
-
-Observed video network behavior:
-
-- Successful XHRs loaded `video.twimg.com/amplify_video/<media-id>/pl/...m3u8` master/rendition/audio playlists.
-- Further XHRs loaded `.../vid/...` and `.../aud/...` `.mp4` initialization data and `.m4s` segments, including quality changes.
-- The numeric video media ID differed from the enclosing status ID. Do not derive a video URL from the tweet ID.
-- Resource Timing reported zero sizes for some cross-origin video entries despite successful playback and HTTP 200 responses in the network log. Zero timing sizes are **not** evidence of blocking.
-
-A locally inspected `TweetDetail` XHR response supplied the focused post's `rest_id`, author identity via `core.user_results.result`, and media under `legacy.extended_entities.media`. The observed user handle was at `core.user_results.result.core.screen_name`. Media fields included `media_key`, `id_str`, `type`, `media_url_https`, `sizes`, `original_info.width/height`, and `video_info.variants` with HLS and MP4 URLs. This suggests ownership, dimensions, and video sources can be obtained without downloading media. The inspected source was XHR, so a fetch-only response observer would miss it.
-
-Do not hard-code the GraphQL operation hash, one response wrapper/entry index, or these examples' IDs into production logic. Any passive metadata observer must handle response wrappers and changes conservatively and avoid collecting unrelated API data. No authenticated response bodies, headers, or HARs were saved to the project.
-
-### Not yet verified
-
-This was the pre-implementation discovery snapshot. A packaged barrier, isolated renderer, popup and browser tests now exist; see §10 for the implemented choice and [docs/validation.md](docs/validation.md) for measured results. The additional [native three-image post](https://x.com/OpenAIDevs/status/2110855382444704190) is now exercised in cold and normal modes. Other album layouts, mixed media, GIFs, quoted videos, additional delivery families and several account-dependent surfaces still need dedicated fixtures. These examples are regression anchors, not exhaustive coverage.
+The semantic adapter uses `article`, `IMG`/`VIDEO`, same-origin status/media anchors, quote boundaries and validated asset metadata. A canonical video cover can identify the enclosing native player by its direct `VIDEO` child, without classifying surrounding post text as controls. Blob-only players without a recognizable cover/source remain unavailable. It does not use `data-testid`, X CSS classes, carousel positions, React props or renderer keys as identity. Ambiguous ownership/attachment associations remain unknown; unsupported markup must not broaden authorization.
 
 ## 7. Chrome constraints and design direction
 
-### Documented constraints
-
-- Ordinary MV3 extensions cannot use `webRequestBlocking`; its blocking mode is reserved for policy-installed extensions. Observational `webRequest` cannot pause a request for asynchronous author classification. [webRequest](https://developer.chrome.com/docs/extensions/reference/api/webRequest)
-- `declarativeNetRequest` (DNR) can block before a request is sent. Response-header-conditioned rules run too late for this requirement. Within an extension, explicit priority governs first, then action precedence; static/dynamic/session rules have no inherent ordering. Equal-priority allow rules outrank block rules. [DNR evaluation](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest#rule-evaluation)
-- DNR sees request properties, not DOM elements, authors, or quote ownership. `tabIds` conditions are available only for session rules. Two occurrences using the same URL in the same tab are not distinguishable by URL/tab conditions. [RuleCondition](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest#type-RuleCondition)
-- Static rules ship with the extension. Dynamic rules persist across sessions/updates; session rules do not. A session-rule update is atomic, but it is not a transaction with DOM changes or navigation. Current documented session quota is 5,000 rules across the extension. Do not allocate permanent rules for an infinite timeline. [Rules and limits](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest)
-- DNR covers requests reaching the network stack, including HTTP-cache responses and network fetches from site service workers. It does not filter responses produced by a service worker or returned from CacheStorage. Cached display needs separate UI handling. [Service worker interactions](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest#interactions-with-service-workers)
-- `document_start` enables early content scripts, but neither a DOM observer nor page-world monkey-patching is a universal pre-request barrier. `ISOLATED` and `MAIN` worlds have different access/CSP boundaries. [Content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)
-- Extension-worker/page fetches have an extension origin and need appropriate host permissions; content-script requests act on behalf of the page origin. An `initiatorDomains` condition identifies the requesting origin, not the destination/media owner. [Cross-origin requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)
-- Chrome extension messaging uses JSON serialization, so do not assume a `Blob` can be sent directly through `runtime.sendMessage`. Extension service workers have a limited lifetime; their globals are not durable grant/settings storage. [Messaging](https://developer.chrome.com/docs/extensions/develop/concepts/messaging), [worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
-
-### Responsibilities and original design constraints
-
-The responsibilities below informed the implementation. The selected, tested transport is documented in §10; alternatives mentioned here are design context, not additional shipped mechanisms.
-
-1. **Network barrier:** packaged, enabled pre-request protection for covered X media delivery. It must already apply during cold startup, before author discovery or storage reads. Include XHR/fetch/other delivery paths rather than relying only on `image`/`media` resource types. Scope filtering to X usage, not unrelated websites sharing a CDN. `pbs.twimg.com/media/`, observed poster paths, and `video.twimg.com` are a starting inventory, not complete coverage.
-2. **Page adapter and policy:** discover media and owning posts, establish the focused author, handle quotes, and render placeholders. Keep observation incremental for infinite scrolling and recycled DOM; avoid repeated whole-page scans or cloning every unrelated API response.
-3. **Loading coordinator:** authorize only the selected/eligible media and reject stale work after navigation or revocation. Treat video as one authorized media item with multiple associated requests. Release detached UI and object URLs; bound bookkeeping.
-4. **Popup/storage:** three booleans with legacy migration and fail-closed startup, settings propagation, accessible dark-only UI without a footer, and honest error states. Use `chrome.storage.local`/`storage.onChanged`; do not persist browsing history or manual media grants.
-
-**Choose the loading mechanism only after a small real-Chrome proof.** Exact-URL session allows by themselves can open identical URLs elsewhere in the tab; broad CDN, video-prefix, tab-wide, or `allowAllRequests` grants are not sufficient evidence of per-item isolation. Temporarily allowing then revoking also has a concurrent-request race.
-
-A candidate is to keep page media requests blocked and use an extension-controlled fetch/render path only for eligible occurrences. This needs proof of permissions, CSP, redirects, image rendering, efficient video streaming/seeking, and extension-to-page transport. Do not buffer entire videos as base64 or add an offscreen document/player framework without demonstrating the need. [Offscreen documents](https://developer.chrome.com/docs/extensions/reference/api/offscreen) are an option, not a requirement. A smaller alternative is acceptable if it proves the same isolation and lifecycle behavior.
-
-A metadata bridge in the page's MAIN world may be needed for XHR/fetch responses, but DOM/metadata discovery must not itself be the download barrier. Validate all bridge messages; page code can forge them. A privileged loader must restrict media destinations, redirects, sender/context, and grants, and must not forward captured authentication headers or act as an arbitrary URL proxy. Prefer credential-free CDN access if verified to work.
-
-Use the smallest permissions set supported by the chosen design: likely `storage`, an appropriate DNR permission, X content-script matches, and necessary media host access. Additional scripting/offscreen/navigation permissions need a concrete use. The extension itself must not require `debugger`, `cookies`, `<all_urls>`, or a permanent CDP connection merely because development tests use CDP.
+- Ordinary MV3 extensions cannot rely on `webRequestBlocking`. Packaged [Declarative Net Request](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest) rules provide the pre-request barrier; DOM callbacks and `document_start` script timing do not.
+- DNR covers requests reaching the network stack, including HTTP cache and network fetches from site workers, but not responses synthesized by a worker or returned from CacheStorage. Cached display needs separate UI handling. [Service worker interactions](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest#interactions-with-service-workers)
+- Extension renderers use an extension origin and constrained host access. An initiator is not a media owner. A broad URL/CDN/tab allow rule would expose duplicate occurrences, even if quickly revoked.
+- Extension workers can suspend. Grants, renderer messages and callbacks need current tab/document/route validation; worker memory is not durable preference storage. [Worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
+- Treat MAIN-world metadata and page messages as untrusted. Sanitize fields, validate again at privileged boundaries, restrict destinations and redirects, and never forward X authentication headers or expose an arbitrary-URL proxy.
+- Use only required storage/DNR and X/media host permissions. Runtime does not require debugger, cookies, all-sites access, an offscreen document, backend or permanent CDP connection.
 
 ## 8. Implementation gates and acceptance tests
 
-### Gate 1 — blocking and loading proof, before full UI
+### Blocking and loading proof
 
-Demonstrate in an unpacked MV3 extension, not just an agent-browser network mock:
+Demonstrate these in real Chrome with the extension active, not a network mock:
 
-1. Fresh navigation to each supplied URL, all three filters ON: blocked media has placeholders and no unauthorized media transfer occurs, including posters and video XHRs.
-2. Click one image and one video: all still images in the selected attachment-post/occurrence group render, each using a separate validated ticket; the selected video plays. Other attachment groups, neighboring posts, duplicate occurrences/tabs and unselected videos remain blocked.
-3. Independent automatic eligibility for A, C and B works without first downloading filtered categories. Test all eight combinations, including the fresh defaults A OFF/C OFF/B ON.
-4. Test duplicate media URLs across categories/quotes and concurrent loads. Prove the loading design does not expose other blocked occurrences.
-5. Repeat after worker suspension, cold start, reload, SPA navigation, and settings changes. Reject delayed callbacks from a prior context. Documented navigation events have no guaranteed ordering with network events, so an event-triggered rule update alone is not a startup/route barrier. [webNavigation](https://developer.chrome.com/docs/extensions/reference/api/webNavigation)
+1. Fresh navigation with all filters ON shows placeholders and no unauthorized transfer, including posters and XHR/fetch video traffic.
+2. One image click loads its occurrence's still-image group with separate tickets; one video click loads that video. Other groups, duplicate occurrences/tabs and videos remain blocked.
+3. Independent A/C/B automatic eligibility works across all eight combinations, including fresh defaults, without first downloading filtered categories.
+4. Concurrent duplicate URLs across categories/quotes do not escape isolation.
+5. Repeat affected cases after worker suspension, startup, reload, SPA transitions and settings changes. Reject delayed callbacks from prior contexts. Route events alone are not a network barrier.
 
-If this proof fails, record the exact limitation and revise the design; do not quietly replace “no download” with “hidden after loading.”
+If proof fails, report the limitation and revise the implementation rather than redefine blocking as hiding.
 
 ### Acceptance matrix
 
 | Area | Required checks |
 | --- | --- |
-| Policy | All eight A/C/B combinations; focused post independent of same-author replies/ancestors; other-author replies/ancestors; focused reply with a preceding ancestor; quote from a different author; unknown ownership; independent recommendations; A-only policy on non-status surfaces. |
-| Per-item behavior | One image click loads all still images in the same attachment post and rendered occurrence, each with a separate validated ticket; mixed image/video attachments where supported; GIF; duplicated URLs and image sizes; no quoted/enclosing-group, neighbor, other-occurrence/tab or video spillover. |
-| Video | Poster blocked; no pre-click manifests/segments; playable after click; seeking/quality changes/audio; failure/retry; later segment requests stop after revocation. |
-| Surfaces | Home, profile posts/media grid, search, bookmarks, Lists/Communities, post-bearing notifications, conversation and media viewer; promoted/recommended posts where available. Missing environments must be reported. |
-| Navigation | Direct load, in-app navigation, Back/Forward, photo/video modal, infinite scroll, recycled DOM, rapid route changes, two tabs showing the same media. |
-| Lifecycle | Fresh defaults A OFF/C OFF/B ON; legacy `{a,b}` migrates with `c=a`; saved three-filter settings; browser restart; suspended extension worker; extension reload/update; no stale grants or startup leakage before the settings read. |
-| Settings | Three exact labels in A/C/B order; popup changes propagate across tabs; OFF makes eligible media load; ON reblocks/revokes; persistence/error states are accurate. |
-| UX | Dark-only popup without a footer; keyboard and visible focus; readable placeholder contrast in X light/dark themes; compact layout; one placeholder per item; no accidental tweet navigation; text/actions/avatars remain usable. |
-| Failure/security | Missing author/metadata; DOM/API change; denied permission; loader failure; invalid/forged/stale message; rule-update failure/quota; malformed URL/redirect. Remain blocked rather than broad-allowing. |
+| Policy | Eight combinations; focused post versus author/other replies and ancestors; focused reply after an ancestor; quotes; unknown ownership; independent recommendations; A-only non-status policy. |
+| Groups | Separate per-image tickets; mixed media/GIF where supported; duplicate URLs/sizes; no quote/enclosing, neighbor, other-occurrence/tab or video spillover. |
+| Video | Blocked poster/manifests/segments before authorization; playback/audio/seeking; retry; future loading stops after revocation. Distinguish fixed MP4 from unimplemented adaptive HLS. |
+| Surfaces | Home, profiles/media grids, search, bookmarks, Lists/Communities, notifications, conversations and photo routes; promoted/recommended posts. Report missing fixtures. |
+| Gallery | Inline manual/automatic enlargement without URL change; direct `/photo/N` startup/reload; ordinal matching; selected-only renderer/network windows; Next/Previous, keyboard, Escape/Close and focus; direct Close returns via replacement to base post; unknown metadata stays blocked. |
+| Navigation/identity | SPA and Back/Forward, infinite scroll, duplicate occurrences, recycled nodes, full DOM replacement losing grants, rapid route changes and concurrent tabs. No dependency on native viewer structure or renderer identity. |
+| Lifecycle | Fresh defaults, legacy migration, saved settings, browser restart, worker suspension, extension reload/update, no stale grants or startup leakage. |
+| Settings/UX | Exact A/C/B labels, cross-tab propagation, OFF eligibility/ON revocation, persistence errors, dark-only popup without footer, keyboard/focus, readable placeholders in X themes, bounded layout and usable text/actions/avatars. |
+| Security/failure | Missing or malformed metadata, changed DOM/schema, denied permissions, loader/redirect-guard failure, stale/forged messages, invalid destinations/redirects. Fail closed, never broad-allow. |
 
 ### Network evidence protocol
 
-- Begin recording **before navigation**, with the extension active. Keep Chrome/extension versions, the exact route, settings, click time and grant scope in local evidence, not a public run diary.
-- Use CDP/DevTools network events and loading outcomes, not screenshots or Resource Timing alone. Correlate every media request with its authorization. Extension-owned requests may occur outside the page target; include the worker/rendering target when applicable.
-- Exercise cold HTTP-cache conditions with the site worker bypassed, then ordinary site-worker-enabled/warm-cache behavior. Prefer an isolated profile/controlled fixture for cache clearing and server-side request counters; do not wipe the user's real profile, cookies, or CacheStorage.
-- For pre-click media, show cancellation before transmission or the absence of outbound media requests in a complete capture. A cached 200 or zero transfer size alone is not proof. Canceled attempts may appear as blocked requests.
-- After click, show only the selected still-image group's independently authorized requests or selected video's necessary request family succeeding, with other groups/occurrences/tabs and unselected videos still blocked. Include independent A/C/B automatic loading in this check.
-- Keep actual network assertions in browser integration tests. Unit/DOM fixtures are useful for classification, quotes, route identity, and recycled nodes but do not prove network safety.
-- Report gaps separately: HTTP-cache bypass tests do not prove normal service-worker behavior, and a development network mock does not prove shipped DNR rules.
+Capture **before navigation**, covering page and extension renderer targets in both target-level HTTP-cache-disabled/site-worker-bypassed and normal conditions. Correlate successful requests with current grants and separately verify visible placeholders/decoded media. Pre-click evidence must show cancellation before transmission or no outbound requests in a complete capture; screenshots, cached 200s, timing sizes and unit/DOM tests alone do not prove safety. Gallery selection windows must distinguish the selected renderer from existing authorized inline media.
+
+Follow the [dedicated-browser procedure](docs/development.md#dedicated-browser-validation) for binding, capture safety and restoration. Keep bounded route/settings evidence local and report missing fixtures and environment gaps separately.
 
 ## 9. Implementation deliverables
 
-- Loadable extension: `extension/manifest.json` and adjacent native JS/HTML/CSS, version **0.1.3**, with no package installation, build step, backend or telemetry.
-- Icon derived from the user-supplied `Grumpy Cat Rubbing Its Eye.png`; marquee assets preserved in `assets/store/` outside the loadable extension. Store preparation deliverables are in §11; publication itself is not authorized by their preparation.
-- [README.md](README.md): user-facing tagline, installation, filters, limits and support. [AGENTS.md](AGENTS.md) routes maintainer tasks; [docs/development.md](docs/development.md) holds local checks and existing-Chrome procedures. Keep architecture/acceptance detail here and measured evidence in validation docs rather than duplicating it in README.
-- `node --test tests/*.test.cjs`: focused policy/worker protocol tests.
-- `node tests/check.mjs`: manifest/resource, syntax, JSON, local-link and whitespace checks.
-- Browser integration scripts: `tests/browser.mjs`, `tests/groups.mjs`, `tests/videos.mjs`, `tests/virtualization.mjs` and `tests/surfaces.mjs`, using `agent-browser` for user actions and scoped CDP network observation. CDP is development-only.
-- [docs/validation.md](docs/validation.md): concise coverage and remaining gaps. Detailed reports stay local.
+- Native JS/HTML/CSS in `extension/`, without dependency installation or a build step. `manifest.json` remains the version/permission source of truth.
+- Offline checks and the sole browser regression entry point follow the [development guide](docs/development.md). Development CDP is not packaged or required at runtime.
+- Documentation follows the ownership map above; do not duplicate run histories.
 
 ## 10. Selected implementation and verified boundaries
 
-**Platform:** Chrome 128+, Manifest V3. The minimum supports the loader's response-header redirect guard; live validation on that minimum version remains outstanding.
+**Platform:** Chrome 128+, MV3, for the response-header redirect guard. Minimum-version testing is tracked in [validation](docs/validation.md).
 
-**Permanent page barrier:** two enabled packaged block rules cover the listed `pbs.twimg.com` post-media/poster prefixes and all `video.twimg.com` paths for X initiators, without restricting protection to image/media resource types. No setting or click creates an allow rule. Network protection therefore does not depend on storage reads, page classification, route-event timing or worker liveness.
+**Permanent barrier:** enabled packaged rules block recognized `pbs.twimg.com` post-image/poster paths and `video.twimg.com` requests initiated by X, without an image/media-only resource-type restriction. No setting or click creates an allow rule. Storage reads, classification and worker liveness therefore do not control the page barrier. It is delivery-family-based, not DOM-owner-aware; an out-of-scope feature reusing covered paths may also be affected.
 
-**Current policy/UI:** three independent filters A/C/B use the labels, defaults and truth table above. Legacy `{a,b}` initializes `c=a`; automatic loading remains blocked until settings are read. The popup is dark-only without a footer. Clicking a still image authorizes its attachment-post/occurrence group, never quoted/enclosing groups, neighbors, other occurrences/tabs or videos. Each image retains a separate validated ticket. Existing preferences are preserved rather than reset to fresh-install defaults.
+**Adapter and bridge:** the current schema/semantic DOM contract is §6. A nonce-bound, one-time MessagePort transfers bounded selected metadata into the isolated script; fields are revalidated there. Trusted input is required for placeholder grants. Metadata and synthetic page clicks are not privileged download commands. Observation does not replace the network barrier.
 
-**Per-item transport:** each selected/automatically eligible image or video receives its own single-use renderer ticket, scoped to tab, exact top-document challenge, route epoch and media item. A grouped still-image click issues separately validated tickets, not a shared group/CDN allow rule. The extension iframe uses anonymous-CORS images or native progressive MP4, including range seeking and audio. The selected MP4 is the highest available bitrate at or below 2.5 Mbps, otherwise the lowest available. For an encoded video thumbnail, its family/media ID must match the poster; an available metadata ID must also agree. A custom `/media/` cover can instead bind an `amplify_video`/`ext_tw_video` MP4 to the same media entry's validated numeric `id_str`. Missing/malformed/mismatched IDs remain denied; metadata never overrides an encoded thumbnail mismatch. The bridge carries only that scalar ID alongside the existing selected media fields, the isolated script validates it, and the worker repeats the binding check. The ID is part of video occurrence identity to revoke recycled/custom-cover replacements. A disconnect removes a renderer's revocation registration only if the entry belongs to that port; a rejected ticket replay cannot unregister the active renderer. The renderer never accepts a page-provided arbitrary fetch command or forwards X authentication headers. A session DNR rule rejects `Location` responses for extension-owned CDN requests; failure to install it denies loading.
+**Occurrence identity:** document-local nonces bind enclosing owner, attachment source, ordinal, normalized asset, kind and validated video ID. The revocation rules in §3 intentionally trade click persistence through virtualization for conservative isolation.
 
-This deliberately avoids Blob/base64 transport, offscreen documents and an HLS/player dependency. It also means **fixed rendition rather than adaptive HLS**; HLS-only/live/paid/third-party deliveries are not proven playable. This is a documented playback ceiling, not a fallback to post-load hiding.
+**Owned gallery:** `viewer.js` owns the modal UI; `content.js` owns selection, grants and renderer lifecycle under §§3–4. Late tickets for disposed items are rejected. The URL selects content, never authorizes it. Gallery loading can make an additional authorized request for an image already loaded inline; no zero-additional-download claim is made.
 
-**Post-only UI scope:** cached-pixel hiding for `tweetPhoto`/`videoPlayer` is scoped to tweet articles or status links. X's shared `swipe-to-dismiss` viewer is hidden/covered only in a current status route, tracked synchronously at startup and across SPA navigation. Avatar/banner viewers on non-status routes remain native; stale coverage is removed when an element loses its post owner or detaches. The permanent DNR barrier remains delivery-family-based, not DOM-owner-aware: excluding these profile-image families does not prove that every out-of-scope X feature using post-media CDN paths is unaffected.
+**Per-item transport:** the worker issues single-use renderer tickets scoped to tab, exact top-document challenge, route epoch and media item. The extension iframe displays anonymous-CORS images or native progressive MP4 with audio/range seeking. It never accepts an arbitrary page fetch request or forwards authentication headers. A session DNR rule rejects `Location` responses from authorized CDN requests; failure to install it denies loading. A rejected ticket replay must not unregister an active renderer's revocation port.
 
-**Page adapter:** document-start scripts pass sanitized GraphQL metadata through a one-time, nonce-bound MessagePort, observe both XHR and fetch, and validate received fields again in the isolated world. Placeholder grants require trusted user activation; forged window metadata and synthetic clicks do not authorize media. Classification resolves the current status ID, waits for a corresponding rendered focus before automatic conversation classification, and uses the enclosing owner for quoted attachments.
+The MP4 selection is the highest available bitrate at or below 2.5 Mbps, otherwise the lowest available. Encoded poster family/media ID must match the selected video; metadata must not override a mismatch. A custom `/media/` cover requires the same media entry's validated numeric `id_str` to bind an `amplify_video`/`ext_tw_video` MP4. Missing/malformed/mismatched bindings stay denied, and the worker repeats the check.
 
-**Native photo interaction:** decoded image renderers send a URL-free readiness notification, accepted only from the current image frame and this extension's origin. Decoded inline images pass input to X's photo links; loading/error frames retain Retry. A trusted unmodified primary click (including keyboard-generated link activation) snapshots authorized asset/index pairs from one attachment occurrence for an exact, short-lived photo-route handoff. The handoff binds to one extension-owned `xmf-viewer` surface in the native dialog, never sidebar copies or another dialog/tab. The current status ID and `/photo/N` select one still image from sanitized metadata; malformed entries retain their ordinal instead of shifting later images. Missing/unsupported metadata leaves a visible, non-loading placeholder. The URL selects content only: it does not grant download permission.
+Playback is **fixed-rendition MP4, not adaptive HLS**. HLS-only, live, paid and third-party media may remain unavailable. No Blob/base64 whole-video transport, offscreen document or player dependency is added. Page-origin playlists/segments remain blocked even when that format is not playable through the extension.
 
-The viewer uses native DOM only to locate one display stage: the carousel list's parent, or the swipe element's parent in a listless viewer. Its single owned surface is outside animated/recycled slides and has an independent occurrence nonce. It does not inspect React media props, native asset IDs, slide positions/counts or selected-slide geometry, and has no animation retry timer. Ambiguous/missing stages remove the surface and revoke its grant; a changed status, dialog, selected image, settings or viewer exit invalidates the appropriate pending/live renderer. Direct clicks remember the still-image group's assets, but only the current selection receives a ticket. A stage replacement within the same dialog can retain the occurrence with a fresh ticket. Same-status exit revokes viewer grants while leaving inline grants intact; late old tickets are rejected.
+These are implementation boundaries, not a fresh browser certification. [Validation](docs/validation.md) separates offline checks, focused browser evidence and remaining limits.
 
-X retains Close, keyboard Next/Previous, Escape and history. Native touch/swipe/drag behavior through the sibling overlay is not verified; this is not a fully independent gallery. It still needs X's dialog/stage hooks, photo-route semantics and passive API metadata. New viewer frames may request another authorized rendition; no zero-additional-download claim is made. DNR, worker sender/document/route/destination validation, permissions and per-item tickets are unchanged. See [viewer coverage and limits](docs/validation.md#route-owned-photo-viewer).
+## 11. Public-store preparation
 
-**Occurrence identity:** includes page epoch, surface/list scope, owning post, quoted attachment source, media index, normalized asset and rendered occurrence. A bounded MAIN-world adapter reads only existing keyed timeline identifiers from X's renderer, enabling real virtualized-node replacement without a URL-level grant. No React library is added. Unknown/colliding renderer identities use document-local nonces and may require a fresh click after full replacement; they are never guessed into shared authorizations. Metadata/grants and pending work are bounded and not persisted.
-
-**Validation scope:** [validation coverage and limits](docs/validation.md) distinguish current browser checks from offline tests and outstanding acceptance cases. Passing focused regressions does not establish universal X-surface support.
-
-## 11. Public-store preparation (local review candidate)
-
-The authorized scope is concrete preparation for a **public Chrome Web Store extension**, not another architecture redesign. The user subsequently authorized creating the same-name public GitHub repository with an MIT license and filling available fields. GitHub source/policy publication is separate from store publication: developer-account registration, payments, legal self-classification, store submission and store publication have not been performed by the assistant. The user reports the store contact email is verified; other account prerequisites were not inspected.
-
-- [Store release checklist](docs/store/README.md), [English listing](docs/store/listing.en.md), [privacy/permission disclosures](docs/store/privacy-practices.md), a GitHub-readable [privacy policy](PRIVACY.md) and [reviewer instructions](docs/store/reviewer-notes.en.md) are prepared. All project/store documentation is English. Policy/store fields are filled with public GitHub maintainer `wtchangdm`, repository/homepage `https://github.com/wtchangdm/x-media-filter`, `/blob/main/PRIVACY.md` policy, `/blob/main/SUPPORT.md` support and effective date 2026-10-17. Support/privacy requests use the documentation page and verified developer email shown on the store listing, without copying that address into the repo; user-facing pages do not announce repository settings. The GitHub handle is an initial public publisher name, not a verified legal identity; final store-account confirmation remains necessary.
-- `python3 scripts/package.py` creates `artifacts/release/x-media-filter-0.1.3.zip`, `SHA256SUMS` and `package-report.json`. The ZIP has the manifest at its root and 17 explicitly inventoried runtime files plus the root MIT LICENSE notice (18 archive files); generated `_metadata`, source artwork, store images, tests and browser/account data are excluded. CRC, per-file source hashes and inventory are checked on readback; repeated builds in the same environment produce identical bytes.
-- [Artwork notes](assets/README.md) identify the 440×280 small promo, 1280×800 actual-settings screenshot and optional 1400×560 marquee. The user confirmed all supplied artwork was generated with ChatGPT and requested direct crop/resize only. Custom layouts, added text/graphics and the Swift exporter were removed; originals remain unchanged outside the ZIP. The square cat supplies the small promo, the existing wide illustration supplies the marquee, and actual 0.1.0 UI supplies the screenshot. A subsequent screenshot-only request centers the intact captured popup between equal strips of its existing document background before resizing; runtime popup layout is unchanged. Its saved all-ON settings are not fresh defaults. The original capture contains no X account content; reuse/cropping is not new browser/network validation.
-- The original release preparation did not change executable runtime files, manifest version 0.1.0 or permissions. The 0.1.3 package includes the route-owned viewer change and is prepared for upload, not submitted or published. The requested MIT license is in root `LICENSE` and in the ZIP, with copyright 2026 wtchangdm. Local Git history uses `main` and the owner's public GitHub noreply author address; generated `_metadata/`, artifacts and private/browser files are ignored. No new extension dependency/build/backend was added.
-- Confirmed decisions: free, all available store regions; public GitHub repository/policy hosting, MIT license and documentation/email support. Public remains the last selected store visibility; Unlisted was discussed, not applied, and needs confirmation only if changing that selection. Remaining: unconfirmed account prerequisites (email verification is reported complete), final publisher name/Trader status, turning off the store's built-in public support hub if enabled, final policy/mailbox/listing/crop review, privacy certifications and assessment of applicable additional in-product disclosure/consent obligations. The store docs include a concise publisher-action checklist. Meaningful support/contact obligations remain. Prefer deferred publishing if submission is later authorized; store publication still needs authorization.
-
-The acceptance gaps in §10 remain; packaging and listing preparation do not resolve them. The conditional BFCache dead-port hypothesis was not fixed or reproduced with native BFCache, and is not being promoted to an established severe release blocker. See the validation record for measured checks and remaining uncertainty.
+The [release guide](docs/store/README.md) owns packaging, artwork and publisher approvals. Release packages must match the validated source. Account/legal actions, submission and publication require explicit authorization; preparation and archive integrity do not establish network safety or resolve acceptance gaps.

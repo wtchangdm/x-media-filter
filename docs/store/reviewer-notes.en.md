@@ -1,6 +1,8 @@
 # Reviewer test instructions — draft for dashboard
 
-X Media Filter 0.1.3 is a desktop Chrome Manifest V3 extension requiring Chrome 128+. There is no extension account, license key, payment, backend or runtime debugging connection. The development CDP harness is not packaged or required for users/reviewers.
+These instructions describe the **current source**. Follow the [release gates](README.md#release-gates) and submit only against a verified matching package.
+
+X Media Filter is a desktop Chrome Manifest V3 extension requiring Chrome 128+. There is no extension account, license key, payment, backend or runtime debugging connection. The development CDP harness is not packaged or required for users/reviewers.
 
 ## Setup and access
 
@@ -25,18 +27,19 @@ Public fixture availability depends on X and may change:
 3. On either video example, click its video placeholder. Native MP4 playback controls appear; start playback and seek if desired. The extension does not force autoplay or sound. No adaptive HLS quality selector is provided.
 4. Reload with all filters ON: previous manual grants are gone. Then turn only the post filter OFF: eligible focused-post media can load automatically without a click. Turn it ON again: media is reblocked and playback/future loading stops; bytes already transferred cannot be recalled.
 5. On the image conversation, independently switch author replies and non-author comments to distinguish those categories from the focused post. An ancestor before the focused post must not become the author reference. Independent recommendations use the post filter. Uncertain classification stays conservative.
-6. Open a second X tab with the same post: preferences propagate, but manual click grants do not. Navigate to another logical route: prior route grants are revoked.
+6. Open a second X tab with the same post: preferences propagate, but manual click grants do not. Navigate to another logical route or fully replace the rendered attachment occurrence: its previous grant is not inherited.
+7. Click a decoded inline image: the extension's own modal gallery opens without changing the URL. Use Previous/Next, Left/Right and Close/Escape; only the selected gallery image receives a renderer. Direct `/photo/N` entry opens the owned gallery without inheriting a manual grant. Close/Escape from that route replaces it with the base post URL. No X native-viewer controls or carousel stages are required.
 
 ## Implementation review notes
 
 - `rules.json` keeps page-origin X media requests blocked for recognized paths, regardless of settings. No tab/CDN-wide allow rule is used for clicks.
 - `worker.js` checks internal sender, tab, exact document context, route epoch, single-use ticket and permitted media destination. A redirect-guard installation failure denies loading.
 - `player.html` renders only the validated image or progressive MP4 with anonymous CORS. It does not act as an arbitrary URL fetch proxy or forward X cookies/authentication headers.
-- `bridge.js` observes relevant X responses already delivered to the page and sends selected metadata through a nonce-bound MessagePort. A bounded synchronous lookup also reads a numeric attachment ID from current host props for image-viewer matching; that page-provided ID does not grant loading authority. No remotely supplied code is executed. All executable resources are packaged.
+- The bridge parses selected metadata already delivered to X; the adapter discovers semantic article/media/status anchors. Page metadata never grants privileged loading authority. The gallery is extension-owned, and all executable resources are packaged.
 - Only three boolean settings are persisted. No analytics, browsing record uploads, remote code, debugger/cookies/history permissions or external services are added by the extension.
 
 ## Known limitations — not a universal compatibility claim
 
-Fixed-rendition progressive MP4 only. HLS-only/live/paid/third-party video may remain unavailable. Recognized pbs.twimg.com post-image/poster paths and video.twimg.com delivery are covered; new hosts or changed X layouts need revalidation. Mixed attachments, animated GIFs, quoted videos, Lists/Communities and full-browser-restart behavior do not have complete current native validation. DMs, Spaces and external embeds are outside the verified scope. Chrome 128 is the minimum supported version, not a verified test environment. See [current coverage and gaps](../validation.md).
+Playback is fixed-rendition MP4; HLS-only/live/paid/third-party video may remain unavailable. New hosts or changed X layouts need revalidation. DMs, Spaces and external embeds are outside the verified scope. Consult [measured coverage and gaps](../validation.md) for unverified surfaces, formats and lifecycle cases; Chrome 128 is a minimum requirement, not a verified test environment.
 
-Version 0.1.3 includes the route-owned photo-viewer fix; see [coverage and remaining limits](../validation.md). Do not submit private CDP URLs, raw API bodies, account screenshots or authenticated HARs as reviewer evidence.
+Do not submit private CDP URLs, raw API bodies, account screenshots or authenticated HARs as reviewer evidence.

@@ -1,72 +1,57 @@
 # Development
 
-Maintainer workflows for the native MV3 extension in `extension/`. Read the section needed for the task. For implementation choices and security boundaries, use [specs.md §10](../specs.md#10-selected-implementation-and-verified-boundaries); product behavior and acceptance cases remain in that specification, not this guide.
+Maintainer workflows for the native MV3 extension in `extension/`. Product semantics, trust boundaries and acceptance gates are in [specs.md](../specs.md); measured coverage belongs in [validation](validation.md).
 
 ## Local checks and reload
 
-Requires **Node.js 22+**. No dependency installation, lockfile, backend or build step is needed.
+Requires **Node.js 22+**. No dependency installation, lockfile or build step is needed.
 
 ```sh
 node --test tests/*.test.cjs
 node tests/check.mjs
 ```
 
-After runtime changes, reload the extension at `chrome://extensions`, then refresh the test X tabs. Documentation-only changes need the static consistency/link check; do not invent application tests for copy edits.
+After runtime changes, reload the unpacked extension at `chrome://extensions`, then refresh test X tabs. Documentation-only changes need consistency/link checks, not a new application test run.
 
-## Existing-Chrome browser validation
+## Dedicated-browser validation
 
-Use the installed browser skill and `agent-browser`, attached only to the **user's already-running Chrome**. The authorized debug endpoint is `<dedicated-loopback-endpoint>`; check availability rather than assuming it is running. Never launch another clean/logged-out browser or alter browser security settings to bypass a denial. CDP is a development tool, not an extension runtime requirement.
+Use the installed browser skill, but **attach only to manually launched official Google Chrome with a separate persistent user-data directory**. The browser is not owned or launched by agent-browser. Never use everyday Chrome, port 9222, automatic discovery, a copied personal profile or an agent-browser-managed replacement browser. Keep the dedicated profile outside the repository and preserve its login, extension installation and settings.
 
-Reuse one named session and `--pin-tab` with shared CDP. Create a fresh test tab:
+### Browser binding and attachment
 
-```sh
-agent-browser --session xmf-check --auto-connect --pin-tab tab new about:blank
-agent-browser --session xmf-check get cdp-url
-agent-browser --session xmf-check tab list --json
-```
-
-Use the current browser WebSocket URL and the **new test tab's `targetId`**. Reacquire IDs and element refs after navigation/reconnection; do not reuse stale values or select an unrelated user tab. Below, `<WS>` and `<TARGET>` stand for those fresh values.
+1. The user launches official Chrome with the dedicated `--user-data-dir` and `--remote-debugging-port=0`, enabling loopback debugging on an ephemeral port. Load `extension/` through **Load unpacked** at `chrome://extensions`; launch-time extension flags and CDP extension-loading helpers are not this workflow. Let the user sign in to X if needed.
+2. Use the machine-local binding at `~/.agent-browser/x-media-filter-browser.json` to identify that profile and the consistent attach-only session. Resolve the endpoint from that profile's **current `DevToolsActivePort`**; validate the bound browser before acting. A saved port or old WebSocket URL is not authoritative. Missing, stale or conflicting binding information is a blocker, not permission to discover another browser or launch one.
+3. Keep the resolved browser WebSocket URL only in process memory. Never print, log, persist or commit it, including in command diagnostics. Do not use `get cdp-url` to expose it, shell tracing or literal endpoints in shell history. In the commands below, `WS` is the privately resolved value, `SESSION` is the bound attach-only session, and `TARGET` is an agent-created test tab's current target ID.
+4. Use that same session with **explicit `--cdp "$WS" --pin-tab` on every agent-browser call**. Never switch a browser-owning session into attached mode or use `--auto-connect`. Actions and scoped CDP network capture must target the same bound browser and tab.
 
 ```sh
-node tests/load.mjs '<WS>'
-node tests/browser.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-cold.json cold
-node tests/browser.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-normal.json normal
-node tests/groups.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-groups-cold.json cold
-node tests/groups.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-groups-normal.json normal
-node tests/videos.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-videos-cold.json cold
-node tests/videos.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-videos-normal.json normal
-node tests/virtualization.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-virtualization.json
-node tests/surfaces.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-surfaces.json
-node tests/scope.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-scope-cold.json cold
-node tests/scope.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-scope-normal.json normal
-node tests/layout.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-layout-cold.json cold
-node tests/layout.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-layout-normal.json normal
-node tests/viewer.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-viewer-cold.json cold
-node tests/viewer.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-viewer-normal.json normal
+agent-browser --session "$SESSION" --cdp "$WS" --pin-tab tab new about:blank
+agent-browser --session "$SESSION" --cdp "$WS" --pin-tab tab list --json
 ```
 
-These are available harnesses, not a requirement to run every one for every change. Select affected acceptance cases from [specs.md §8](../specs.md#8-implementation-gates-and-acceptance-tests) and stop once they pass. Reuse the connected browser session rather than repeatedly reconnecting. Each standalone capture harness opens an additional CDP client and may trigger another Remote Inspect approval; avoid redundant invocations, and never disable Chrome consent/security controls to suppress prompts. Public regression fixtures are in [§6](../specs.md#6-discovery-evidence); coverage and gaps are in [validation](validation.md).
+Confirm the unpacked extension ID in `chrome://extensions` and set `XMF_EXTENSION_ID` for the harness. Recheck it if the source path changes. Reacquire tab IDs and element references after navigation or reconnection. Keep Chrome visible for placeholder, focus, keyboard and playback checks; headless/DOM results are not headed-browser evidence.
 
-Before running a harness that changes preferences, record the original A/C/B booleans in a local file. A killed process may not run its cleanup. After an interruption, verify and restore those saved values and close only test-created tabs; do not guess the user's original preferences.
+### Regression entry point
 
-`load.mjs` uses development-only `Extensions.loadUnpacked`. If Chrome denies it, use the manual installation/reload procedure instead; do not change security controls. If a different project path changes the unpacked extension ID, set `XMF_EXTENSION_ID` to the ID returned by `load.mjs` before running the browser harnesses.
+Use only `tests/browser.mjs` as the browser regression command entry point. `tests/cdp.mjs` and `tests/media-capture.mjs` are supporting capture utilities, not alternative browser workflows.
 
-`browser.mjs` temporarily changes popup settings, creates test/helper tabs and adds removable duplicate-attachment DOM fixtures. It restores settings and closes its helper tabs afterward. It stops only **this extension's** worker to test recovery, not X's or another extension's worker. `scope.mjs` uses the public ArtificialAnlys profile to check native avatar zoom, non-post selector fixtures, a post image viewer and post-to-profile SPA navigation; it temporarily enables all filters and restores preferences. `virtualization.mjs` and `surfaces.mjs` require all three filters ON, not fresh-install defaults. `layout.mjs` checks the supplied viewer sidebar after direct hard refresh (`ignoreCache`), native post-to-viewer SPA navigation and another hard refresh. It checks bounded, borderless placeholders, selected-image loading and duplicate isolation; it restores temporary all-ON settings and removes its duplicate fixture. `viewer.mjs` checks native image links on the existing ArtificialAnlys image thread and Home with A ON/OFF, duplicate isolation, keyboard/Close/history, four-image Next/Previous and direct-viewer group selection/revocation/reload. It temporarily sets C/B ON, restores preferences and closes its popup tab. Its native album is the user-supplied Cloudflare four-image post. Direct-viewer network checks use separate request windows for each selected image. The keyboard checks induce a local image decode error in the test renderer and exercise real Retry focus recovery; they do not simulate an actual CDN outage. Before native pointer activation it requires a stable current element/center hit target, rechecks after hover, and batches mouse down/up to avoid a long synthetic hold. It verifies trusted input actually reached that current element (and the button for a placeholder). Viewer readiness checks the single owned surface's decoded geometry. Album checks compare decoded renderer assets against the corresponding inline photo links; they do not inspect React props. Timeout diagnostics retain aggregate state, allowlisted fixture IDs and bounded input traces, not timeline content. An optional final argument selects `home`, `home-auto`, `album`, `single` or `custom` for focused diagnosis; the default `all` includes the single-photo case only when `XMF_SINGLE_PHOTO_URL` is supplied, otherwise it records that case as skipped. Set `XMF_SINGLE_PHOTO_URL` locally to an X status URL without a `/photo/...` suffix; never commit the value. `single` requires that variable and covers listless or carousel-based single-photo viewers: manual/automatic native SPA entry, duplicate isolation, keyboard/Retry, direct startup/reload and one-asset selection windows. Run it in both normal and cold modes, for example `node tests/viewer.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-single-normal.json normal single`. Restore user settings and close only tabs created for the test.
+```sh
+node tests/browser.mjs "$WS" "$TARGET" "$SESSION" /tmp/xmf-cold.json cold
+node tests/browser.mjs "$WS" "$TARGET" "$SESSION" /tmp/xmf-normal.json normal
+```
 
-For a supplied multi-image viewer, set `XMF_ALBUM_URL` locally to its status URL without a photo suffix and `XMF_ALBUM_IMAGES` to its attachment count (3–16). Do not commit the URL. Run `node tests/viewer.mjs '<WS>' '<TARGET>' xmf-check /tmp/xmf-custom-normal.json normal custom`, then repeat in `cold` mode. `custom` requires both variables and covers manual/automatic SPA entry, duplicate isolation, keyboard/Retry, direct startup, lazy sibling selection, Next/Previous, revocation and reload. The `album` scope accepts the same overrides but skips the initial manual/automatic SPA pair; its default remains the Cloudflare four-image post. Reports use a fixture alias instead of the supplied URL.
+Select affected acceptance cases from [specs.md §8](../specs.md#8-implementation-gates-and-acceptance-tests). The harness is a focused regression, not proof of every surface or setting. Browser interaction must use trusted input and current hit targets; the gallery is extension-owned, not X's native viewer. Capture the X page and extension renderer requests before navigation, including startup, SPA transitions, duplicate occurrences and video-segment attempts relevant to the change. Check visible placeholders and decoded/playable output separately from network outcomes.
 
-Viewer/video harnesses wait for the explicit CDP connection before creating helper tabs or changing settings. Connection errors remain failures (no automatic retries or longer timeouts); early rejection is handled so the caller can run cleanup. CLI errors omit command arguments that could contain browser-control URLs or encoded private fixture URLs.
+**Before any preference changes**, save the original A/C/B booleans in a machine-local JSON file as `{"filters":{"a":false,"c":false,"b":true}}`, using the actual saved values rather than copying these example defaults. Pass its path through `XMF_ORIGINAL_FILTERS_FILE`. Without that variable the harness creates `<report>.original.json` exclusively before mutation and refuses to overwrite an existing record. Retain the original snapshot through retries and interruptions; never overwrite it with temporary test settings. Cleanup in `finally` is not enough for a killed process. After completion or interruption, explicitly verify and restore the saved original filters. Restore temporary target-level cache/site-worker controls and remove only test-created fixtures/helper tabs. Do not close the browser, the attach-only session or unrelated tabs, and do not use `agent-browser close`. Preserve the profile and original-settings snapshot until restoration is confirmed.
 
 ### Safety and evidence
 
-Navigation, scrolling, media clicks, reloads and local extension testing are in scope. Do not publish posts or change account/security settings while testing. Media/network changes need both visible-placeholder and real Chrome network evidence; DOM assertions, mocked requests and zero Resource Timing sizes alone do not establish zero downloads.
+Navigation, scrolling, media clicks, reloads and local extension testing are in scope. Do not publish posts, modify account/security settings, bypass browser consent or change security controls to overcome a denial. Connection failures remain failures; do not silently switch browser backends or retry against another profile.
 
-Cold mode temporarily disables HTTP cache and bypasses the site worker on test targets only, then restores those controls. Do not clear the user's profile, cookies, accounts, site storage or CacheStorage. Use reversible test-target controls for cold-cache work in the authorized existing Chrome; do not launch another browser/profile.
+Cold mode disables HTTP cache and bypasses the site worker on test targets only, then restores those controls. Normal mode retains cache/site-worker delivery; when the current X document has a dormant registered worker, the capture helper wakes it before navigation to attach network observation. A controlled page without an observed worker fails the harness rather than being reported as complete network coverage. Do not clear cookies, accounts, site storage, CacheStorage or the profile. Zero Resource Timing sizes, cached responses and DOM mocks alone do not prove zero downloads.
 
-Keep captures local and minimal. Do not commit cookies, authorization/CSRF headers, raw authenticated API bodies, HARs, unrelated browsing content or browser-control URLs. Reports retain aggregate outcomes and credential-presence booleans, not credential values. CDP URLs grant browser control: do not commit or share them.
-
-Keep exact browser versions, routes/settings and per-run network outcomes in local reports under `/tmp` or ignored `artifacts/`, not committed JSON or dated public logs. Public validation docs should summarize coverage and actionable limits. Include affected startup, SPA, duplicate-occurrence and video-segment cases in the check, and report material gaps to the user. Do not turn missing fixtures or historical runs into current universal-support claims.
+Keep captures local, minimal and outside tracked source. Do not retain cookies, authorization/CSRF headers, raw authenticated response bodies, HARs, unrelated account content or browser-control URLs. Record only the route/settings and network/visible outcomes needed to evaluate the change; private fixture URLs stay local. Public validation documentation summarizes current coverage and material gaps, not per-run reports or browser-version inventories. Historical native-viewer or retired-harness results do not validate the current adapter/gallery.
 
 ## Release and artwork work
 
-Use the [store preparation guide](store/README.md) for packaging, listing fields and publisher actions. Artwork sources, crop coordinates and screenshot provenance are in [assets/README.md](../assets/README.md). Store submission/publication and account/legal actions require their own authorization; changing developer documentation does not imply it.
+Use the [store preparation guide](store/README.md) for packaging and publisher approval gates, and [assets/README.md](../assets/README.md) for artwork. Store submission/publication and account/legal actions require separate authorization.

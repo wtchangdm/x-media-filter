@@ -8,10 +8,10 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = (
-    "bridge.js", "content.css", "content.js",
+    "adapter.js", "bridge.js", "content.css", "content.js",
     "icons/icon-16.png", "icons/icon-32.png", "icons/icon-48.png", "icons/icon-128.png",
     "manifest.json", "player.css", "player.html", "player.js", "policy.js",
-    "popup.css", "popup.html", "popup.js", "rules.json", "worker.js",
+    "popup.css", "popup.html", "popup.js", "rules.json", "viewer.js", "worker.js",
 )
 source = ROOT / "extension"
 # Chrome writes _metadata into an unpacked directory; it is never distributable source.

@@ -1,10 +1,23 @@
-/* This hides cached pixels only. The packaged DNR rules are the network barrier. */
-:is(article[data-testid="tweet"], a[href*="/status/"]) :is([data-testid="tweetPhoto"], [data-testid="videoPlayer"]),
-:root[data-xmf-status] [data-testid="swipe-to-dismiss"],
-[data-xmf-covered] { visibility: hidden !important; }
-[data-xmf-covered] { isolation: isolate; }
-/* X can reuse a fixed-width image wrapper from the wider post in the viewer sidebar. */
-a[href*="/status/"] > :has([data-xmf-covered]) { max-width: 100%; }
-/* One route-selected surface, outside X's animated/recycled slides. */
-xmf-viewer { position: absolute; inset: 0; display: block; z-index: 3; }
-xmf-slot { visibility: visible !important; position: absolute !important; inset: 0 !important; z-index: 3 !important; display: block !important; min-height: 80px; }
+/* Cached pixels only: packaged DNR rules, not this stylesheet, prevent downloads. */
+:is(article, a[href*="/status/"], :root[data-xmf-status]) img:is(
+  [src^="https://pbs.twimg.com/media/"],
+  [src^="https://pbs.twimg.com/amplify_video_thumb/"],
+  [src^="https://pbs.twimg.com/ext_tw_video_thumb/"],
+  [src^="https://pbs.twimg.com/tweet_video_thumb/"],
+  [srcset*="https://pbs.twimg.com/media/"],
+  [srcset*="https://pbs.twimg.com/amplify_video_thumb/"],
+  [srcset*="https://pbs.twimg.com/ext_tw_video_thumb/"],
+  [srcset*="https://pbs.twimg.com/tweet_video_thumb/"]
+),
+:is(article, a[href*="/status/"], :root[data-xmf-status]) video,
+[data-xmf-covered] > :not(xmf-slot) { visibility: hidden !important; }
+[data-xmf-covered] { isolation: isolate; max-width: 100%; }
+[data-xmf-covered]:focus-visible { outline: 3px solid #60e0a7; outline-offset: 2px; }
+[data-xmf-covered] > xmf-slot {
+  visibility: visible !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 3 !important;
+  display: block !important;
+  min-height: 80px;
+}

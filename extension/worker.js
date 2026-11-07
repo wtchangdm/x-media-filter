@@ -89,8 +89,11 @@ chrome.runtime.onConnect.addListener(port => {
         return;
       }
       if (msg.type !== "grant") return;
-      if (typeof msg.id !== "string" || msg.id.length > 1000 || session.pending.size >= 300) {
+      if (typeof msg.id !== "string" || msg.id.length > 1000) {
         send(port, {type: "denied", epoch: msg.epoch}); return;
+      }
+      if (session.pending.size >= 300 && !session.pending.has(msg.id)) {
+        send(port, {type: "denied", id: msg.id, epoch: msg.epoch}); return;
       }
       const request = {};
       session.pending.set(msg.id, request);
@@ -98,16 +101,17 @@ chrome.runtime.onConnect.addListener(port => {
       const version = revision;
       await ready;
       const url = P.mediaURL(msg.url, msg.kind);
-      if (!loaderSafe || !url || (msg.kind === "video" && !P.videoMatchesPoster(msg.poster, url, msg.mediaId)) || typeof msg.id !== "string" || msg.id.length > 1000 || msg.epoch !== epoch ||
+      if (!loaderSafe || !url || (msg.kind === "video" && !P.videoMatchesPoster(msg.poster, url, msg.mediaId)) || msg.epoch !== epoch ||
           typeof msg.manual !== "boolean" || !["A", "C", "B", null].includes(msg.category) ||
-          (!msg.manual && P.blocked(settings, msg.category)) || session.items.size >= 300 ||
-          !(await current(session)) || session.epoch !== epoch || revision !== version || session.pending.get(msg.id) !== request) {
+          (!msg.manual && P.blocked(settings, msg.category)) ||
+          !(await current(session)) || session.epoch !== epoch || revision !== version || session.pending.get(msg.id) !== request ||
+          (session.items.size >= 300 && !session.items.has(msg.id))) {
         if (session.pending.get(msg.id) === request) session.pending.delete(msg.id);
         send(port, {type: "denied", id: msg.id, epoch: msg.epoch}); return;
       }
       revoke(session, msg.id);
       const ticket = {token: crypto.randomUUID(), id: msg.id, url, kind: msg.kind, category: msg.category, manual: msg.manual,
-        epoch, session, consumed: false, expires: Date.now() + 15000};
+        epoch, session, expires: Date.now() + 15000};
       session.items.set(msg.id, ticket); tickets.set(ticket.token, ticket);
       send(port, {type: "ticket", id: msg.id, token: ticket.token, epoch});
     });
@@ -123,12 +127,11 @@ chrome.runtime.onConnect.addListener(port => {
       token = msg.token;
       const ticket = tickets.get(token);
       tickets.delete(token);
-      if (!ticket || ticket.consumed || ticket.expires < Date.now() || ticket.session.tab !== sender.tab.id ||
+      if (!ticket || ticket.expires < Date.now() || ticket.session.tab !== sender.tab.id ||
           ticket.session.epoch !== ticket.epoch || ticket.session.items.get(ticket.id) !== ticket ||
           !(await current(ticket.session)) || ticket.session.items.get(ticket.id) !== ticket) {
         send(port, {type: "stop"}); return;
       }
-      ticket.consumed = true;
       players.set(token, port);
       send(port, {type: "load", kind: ticket.kind, url: ticket.url});
     });

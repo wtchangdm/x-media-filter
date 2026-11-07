@@ -1,33 +1,6 @@
 # X Media Filter Support
 
-Installation help, troubleshooting and known limitations for X Media Filter **0.1.1**.
-
-## Install and start
-
-Requires desktop **Chrome 128 or later**. There is no extension account, subscription or payment.
-
-For manual installation of the current unpacked version:
-
-1. Download the repository and extract it locally.
-2. Open `chrome://extensions` and enable **Developer mode**.
-3. Select **Load unpacked**, then choose the extracted **`extension/`** directory, not the repository root.
-4. Pin X Media Filter to the toolbar and refresh existing X tabs.
-
-## Understand the filters
-
-**ON blocks downloads; OFF makes recognized media eligible to load.** Fresh-install defaults:
-
-| Filter | Default | Applies to |
-| --- | --- | --- |
-| Filter media on post | OFF | The focused post and independent posts in timelines, profiles and search. |
-| Filter media on author replies | OFF | Conversation replies and ancestors by the focused post's author. |
-| Filter media on non-author comments | ON | Conversation replies and ancestors by other authors. |
-
-Settings apply across this browser profile's X tabs. To block all recognized post media, turn all three ON. Avatars and profile banners are not targets.
-
-Click a blocked image, or focus its placeholder with Tab and press Enter, to load the still images in that attachment group and rendered location. A video click loads only that video. Other posts, separate quote groups, duplicate locations and tabs do not inherit the click.
-
-Reloading or changing logical pages clears temporary grants. Turning a category ON revokes its grants. Already downloaded bytes cannot be undone.
+For installation, filter defaults and click-to-load controls, see the [user guide](README.md). Requires desktop **Chrome 128 or later**; no extension account, subscription or payment is needed.
 
 ## Troubleshooting
 
@@ -49,17 +22,17 @@ Playback uses a selected progressive MP4 with native controls and seeking when s
 
 ### A previously selected item needs another click
 
-Grants are temporary and scoped to the current page and rendered occurrence. Navigation/reload clears them. If X replaces a virtualized item without a stable, unambiguous identity, another click may be necessary rather than risk authorizing a different item.
+Grants are temporary and scoped to the current page and rendered occurrence. Navigation, reload or full DOM replacement clears them, even if the replacement shows the same post. Turning a category ON also revokes its grants; already downloaded bytes cannot be undone.
 
 ## Known limitations
 
 Filtering covers recognized post-image/video-thumbnail paths on `pbs.twimg.com` and X-initiated delivery on `video.twimg.com`, not every possible X delivery mechanism. New hosts or changed X layouts may need an update.
 
-Other album layouts, mixed attachments, animated GIFs, quoted videos, Lists/Communities, full Chrome restart and additional delivery families do not have complete current native validation. Missing fixtures are not reported as passed. See [README](README.md) and [validation evidence](docs/validation.md) for precise coverage.
+Not every surface, attachment format or lifecycle has passed browser validation. See [measured coverage and remaining gaps](docs/validation.md); missing fixtures are not reported as passed.
 
 ## Contact and privacy requests
 
-For a problem not covered here, a privacy question or a data-removal request, use the **verified developer contact email displayed on this extension's Chrome Web Store listing**. No personal email address is duplicated in this public repository. Until the store listing exists, that contact route is not yet available from a listing; this page does not invent a temporary address.
+For a problem not covered here, a privacy question or a data-removal request, use the **verified developer contact email displayed on this extension's [Chrome Web Store listing](https://chromewebstore.google.com/detail/x-media-filter/foikoegjbgcejpbjgnbggcjoaminebem)**. No personal email address is duplicated in this public repository.
 
 For troubleshooting, include only:
 

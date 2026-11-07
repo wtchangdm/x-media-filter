@@ -4,7 +4,6 @@
 - Effective date: **2026-10-17**
 - Project: [X Media Filter](https://github.com/wtchangdm/x-media-filter)
 - Support: [Support and troubleshooting](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md)
-- Applies to extension versions **0.1.0–0.1.1**.
 
 ## Purpose
 
@@ -32,7 +31,7 @@ Chrome and the Chrome Web Store may independently process installation, update, 
 
 Only filter preferences are deliberately persisted by the extension. Change them in the toolbar popup. Uninstalling removes its local extension storage through Chrome. The publisher has no extension-uploaded browsing records to retrieve or delete.
 
-Temporary metadata and grants remain in memory while their document/worker context exists, with bounded records. Grants are revoked on logical route changes, reloads or applicable reblocking. Closing X tabs releases their document state. Browser-managed HTTP/media caches may retain previously downloaded bytes independently; revoking a grant or uninstalling does not erase those caches or undo prior transfers.
+Temporary metadata and grants remain in memory while their document/worker context exists, with bounded records. Grants are revoked on logical route changes, reloads, full replacement of their rendered occurrence or applicable reblocking. Closing X tabs releases their document state. Browser-managed HTTP/media caches may retain previously downloaded bytes independently; revoking a grant or uninstalling does not erase those caches or undo prior transfers.
 
 ## Limited Use
 
@@ -42,11 +41,11 @@ X Media Filter's use of information accessed through Chrome APIs adheres to the 
 
 This policy and the project's source are hosted in the public [X Media Filter repository](https://github.com/wtchangdm/x-media-filter). Visiting GitHub is separate from using the extension: the extension does not send browsing data to GitHub. GitHub processes website visits and account activity under the [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 
-The [support page](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md) provides installation help, troubleshooting and known limitations. For direct support or privacy requests, use the verified developer contact email displayed on the extension's Chrome Web Store listing when available; no personal address is duplicated in this repository.
+For direct support or privacy requests, follow the [support page's developer-contact instructions](https://github.com/wtchangdm/x-media-filter/blob/main/SUPPORT.md). No personal address is duplicated in this repository.
 
 If you choose to send an email, the publisher receives your sender address, message and any attachments. This is separate from the extension, which does not automatically send diagnostics or browsing records. Support information is used to address your request, troubleshoot the extension, handle security/privacy concerns and meet applicable obligations. The publisher and the email providers involved in delivering or responding to the message process that correspondence; support messages are not published in this repository. Email providers' own service/privacy policies also apply.
 
-Support correspondence is retained only as needed to address the request and meet applicable security/legal obligations, then deleted when no longer needed. Request access or deletion through the same developer contact address. This does not promise erasure of recipients' copies, provider backups or records the provider or publisher must retain under applicable requirements. No fixed provider log-retention period is invented here.
+Support correspondence is retained only as needed to address the request and meet applicable security/legal obligations, then deleted when no longer needed. Request access or deletion through the same developer contact address. This does not promise erasure of recipients' copies, provider backups or records the provider or publisher must retain under applicable requirements.
 
 Do not send passwords, cookies, authentication headers, CDP URLs, private posts or unrelated account information. Share only the minimum information needed for your request and redact personal information from screenshots.
 

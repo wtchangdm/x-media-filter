@@ -2,6 +2,7 @@
 const inputs = [...document.querySelectorAll("input")];
 const error = document.getElementById("error");
 let current = {a: true, c: true, b: true};
+let settingsChanged = false;
 function render() {
   for (const input of inputs) {
     input.checked = current[input.id];
@@ -9,7 +10,8 @@ function render() {
 }
 function failure(message) { error.textContent = message; error.hidden = false; }
 chrome.storage.local.get("filters").then(raw => {
-  current = XMFPolicy.normalizeSettings(raw.filters); render();
+  if (!settingsChanged) current = XMFPolicy.normalizeSettings(raw.filters);
+  render();
   inputs.forEach(input => { input.disabled = false; });
 }).catch(() => failure("Could not read saved filters. Close and reopen to retry. Media stays blocked by default."));
 for (const input of inputs) input.addEventListener("change", async () => {
@@ -20,5 +22,8 @@ for (const input of inputs) input.addEventListener("change", async () => {
   finally { render(); inputs.forEach(control => { control.disabled = false; }); }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.filters) { current = XMFPolicy.normalizeSettings(changes.filters.newValue); render(); }
+  if (area === "local" && changes.filters) {
+    settingsChanged = true;
+    current = XMFPolicy.normalizeSettings(changes.filters.newValue); render();
+  }
 });

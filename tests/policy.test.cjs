@@ -127,6 +127,9 @@ test("hostile, malformed, non-post, playlist, and segment URLs are rejected befo
   for (const url of hostile) {
     assert.equal(mediaURL(url, "image"), null, String(url));
     assert.equal(mediaURL(url, "video"), null, String(url));
+    assert.equal(sameAsset(url, url), false, String(url));
+    assert.equal(sameAsset(image, url), false, String(url));
+    assert.equal(sameAsset(url, image), false, String(url));
   }
 });
 
@@ -138,6 +141,8 @@ test("asset comparison ignores image sizing query but never merges different pat
   assert.equal(sameAsset(video, video.replace("tag=12", "tag=16")), true);
   assert.equal(sameAsset(video, video.replace("1280x720", "640x360")), false);
   assert.equal(sameAsset(image, video), false);
+  assert.equal(sameAsset(video, image), false);
+  assert.equal(sameAsset(image, image.replace("https://pbs.twimg.com", "HTTPS://PBS.TWIMG.COM")), true);
   assert.equal(sameAsset("https://evil.test/media/a", "https://evil.test/media/a"), false);
   assert.equal(sameAsset(null, null), false);
 });
