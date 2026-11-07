@@ -38,31 +38,33 @@ var XMFAdapter = (function () {
 
   function owner(article, posts) {
     if (article?.tagName !== "ARTICLE") return null;
-    const anchors = [...article.querySelectorAll("a[href]")].filter((anchor) => {
+    const anchors = new Map();
+    for (const anchor of article.querySelectorAll("a[href]")) {
       const status = link(anchor);
-      return status && status.ordinal === null && !quoteBoundary(anchor, article) &&
-        !anchor.querySelector("img, video");
-    });
+      if (status && status.ordinal === null && !quoteBoundary(anchor, article) &&
+          !anchor.querySelector("img, video")) anchors.set(anchor, status.id);
+    }
+    const ids = [...new Set(anchors.values())];
+    if (ids.length < 2) return ids[0] || null;
+    const entries = ids.flatMap((id) =>
+      (record(posts, id)?.media || []).map((entry) => ({ id, entry })));
     const attributions = new Set();
+    // Remove only structurally and uniquely metadata-proven player credits.
     for (const video of article.querySelectorAll("video")) {
       if (quoteBoundary(video, article)) continue;
       const shell = video.parentElement;
       const links = [...shell.querySelectorAll("a")];
       if (links.length !== 1) continue;
-      const item = nativeMedia(video)?.poster ? nativeMedia(video) :
-        nativeMedia(shell.querySelector("img"));
+      const native = nativeMedia(video);
+      const item = native?.poster ? native : nativeMedia(shell.querySelector("img"));
       if (!item?.poster) continue;
-      // Attribution is structural, but only a unique metadata owner may prove it.
-      const matches = [...new Set(anchors.map((anchor) => link(anchor).id))].flatMap((id) => {
-        const entries = (record(posts, id)?.media || []).filter((entry) => policy.sameAsset(entry?.poster, item.poster));
-        return entries.map((entry) => ({ id, entry }));
-      });
+      const matches = entries.filter(({ entry }) => policy.sameAsset(entry?.poster, item.poster));
       if (matches.length !== 1) continue;
       const { id, entry } = matches[0];
-      if (anchors.some((anchor) => !shell.contains(anchor) && link(anchor).id === id) &&
+      if ([...anchors].some(([anchor, candidate]) => candidate === id && !shell.contains(anchor)) &&
           nativePlayer(video, item, article, entry) === shell) attributions.add(links[0]);
     }
-    const candidates = new Set(anchors.filter((anchor) => !attributions.has(anchor)).map((anchor) => link(anchor).id));
+    const candidates = new Set([...anchors].filter(([anchor]) => !attributions.has(anchor)).map(([, id]) => id));
     const quoted = new Set();
     for (const id of candidates) {
       const quote = record(posts, id)?.quote;
@@ -189,15 +191,20 @@ var XMFAdapter = (function () {
       if (node.closest("xmf-slot")) continue;
       const item = nativeMedia(node);
       if (!item) continue;
-      const nearest = node.closest("article");
-      let article = nearest;
-      while (article?.parentElement?.closest("article")) article = article.parentElement.closest("article");
+      let nearest = null;
+      let article = null;
+      let boundary = null;
+      for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+        if (parent.tagName === "ARTICLE") {
+          nearest ||= parent;
+          article = parent;
+        } else if (!nearest && isQuoteBoundary(parent)) boundary ||= parent;
+      }
       const anchor = node.closest("a[href]");
       const status = link(anchor);
       if (!article && !status?.ordinal) continue;
       const enclosing = article ? getOwner(article) : null;
       const local = nearest ? getOwner(nearest) : null;
-      const boundary = nearest && quoteBoundary(node, nearest);
       let attachment = status?.ordinal ? status.id : (!boundary ? local : null);
       const enclosingRecord = record(posts, enclosing);
       // An unlinked quote can only be identified by a unique canonical-poster match.
@@ -206,13 +213,11 @@ var XMFAdapter = (function () {
         if (quoted?.media?.some((entry) => policy.sameAsset(entry?.poster, item.poster))) attachment = quoted.id;
       }
       const metadata = record(posts, attachment);
-      const matches = [];
-      for (const [index, entry] of (metadata?.media || []).entries()) {
-        if (policy.sameAsset(entry?.poster, item.poster)) matches.push({ entry, index });
-      }
       const ordinal = status?.ordinal ? status.ordinal - 1 : null;
-      const match = ordinal !== null ? matches.find(({ index }) => index === ordinal)
-        : matches.length === 1 ? matches[0] : null;
+      const matches = (metadata?.media || []).flatMap((entry, index) =>
+        (ordinal === null || ordinal === index) && policy.sameAsset(entry?.poster, item.poster)
+          ? [{ entry, index }] : []);
+      const match = matches.length === 1 ? matches[0] : null;
       const element = surface(node, item, nearest, match?.entry);
       if (!element) continue;
       const mediaId = typeof match?.entry.mediaId === "string" && /^\d{1,25}$/.test(match.entry.mediaId)
@@ -223,9 +228,9 @@ var XMFAdapter = (function () {
       const candidate = policy.mediaURL(match?.entry.video, "video");
       if (candidate && policy.videoMatchesPoster(item.poster, candidate, mediaId)) video = candidate;
       const attachmentKnown = Boolean(attachment && (!metadata || match));
-      let known = Boolean(enclosing && attachmentKnown && nativeValid);
-      if (known && attachment !== enclosing &&
-          (enclosingRecord ? enclosingRecord.quote !== attachment : !boundary && nearest === article)) known = false;
+      const related = attachment === enclosing || (enclosingRecord
+        ? enclosingRecord.quote === attachment : boundary || nearest !== article);
+      const known = Boolean(enclosing && attachmentKnown && nativeValid && related);
       const thumbnail = item.poster && /^\/(?:tweet_video_thumb|ext_tw_video_thumb|amplify_video_thumb)\//.test(new URL(item.poster).pathname);
       const kind = node.tagName === "VIDEO" || thumbnail || ["video", "animated_gif"].includes(match?.entry.type) ? "video" : "image";
       const descriptor = {

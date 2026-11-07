@@ -70,8 +70,8 @@
   function applySettings(next) {
     const previous = settings;
     settings = P.normalizeSettings(next);
-    const turnedOn = category => ["A", "C", "B"].some(candidate =>
-      (category === null || candidate === category) && !P.blocked(previous, candidate) && P.blocked(settings, candidate));
+    const enabled = ["A", "C", "B"].filter(cat => !P.blocked(previous, cat) && P.blocked(settings, cat));
+    const turnedOn = cat => cat === null ? enabled.length > 0 : enabled.includes(cat);
     if (viewerSurface && turnedOn(category(viewerSurface))) viewerSurface.allowed.clear();
     for (const item of items.values()) if (turnedOn(category(item))) {
       item.manual = false; reset(item);
@@ -80,26 +80,26 @@
   }
   function message(msg) {
     context();
-    if (msg.type === "settings") applySettings(msg.settings);
-    else if (msg.type === "revoked" && msg.epoch === epoch) {
-      const item = [...items.values()].find(item => item.id === msg.id);
+    if (msg.type === "settings") { applySettings(msg.settings); return; }
+    if (msg.epoch !== epoch || !["revoked", "ticket", "denied"].includes(msg.type)) return;
+    const item = [...items.values()].find(item => item.id === msg.id);
+    if (msg.type === "revoked") {
       applySettings(msg.settings);
       if (item?.id === msg.id) reset(item);
-    } else if (msg.epoch === epoch && (msg.type === "ticket" || msg.type === "denied")) {
-      const item = [...items.values()].find(item => item.id === msg.id);
-      if (!item || !item.element.isConnected || !item.pending) { post({type: "revoke", id: msg.id}); return; }
-      item.pending = false;
-      if (msg.type === "denied") { item.button.disabled = false; item.button.textContent = "Unable to load — click to retry"; return; }
-      item.workerCategory = category(item);
-      if (!item.manual && P.blocked(settings, item.workerCategory)) { reset(item); return; }
-      post({type: "category", id: item.id, epoch, category: item.workerCategory});
-      const frame = document.createElement("iframe");
-      frame.title = item.kind === "video" ? "Selected post video" : "Selected post image";
-      frame.allow = "fullscreen"; frame.referrerPolicy = "no-referrer";
-      frame.src = chrome.runtime.getURL("player.html") + "#" + msg.token;
-      item.shadow.replaceChildren(item.style, frame);
-      item.frame = frame;
+      return;
     }
+    if (!item || !item.element.isConnected || !item.pending) { post({type: "revoke", id: msg.id}); return; }
+    item.pending = false;
+    if (msg.type === "denied") { item.button.disabled = false; item.button.textContent = "Unable to load — click to retry"; return; }
+    item.workerCategory = category(item);
+    if (!item.manual && P.blocked(settings, item.workerCategory)) { reset(item); return; }
+    post({type: "category", id: item.id, epoch, category: item.workerCategory});
+    const frame = document.createElement("iframe");
+    frame.title = item.kind === "video" ? "Selected post video" : "Selected post image";
+    frame.allow = "fullscreen"; frame.referrerPolicy = "no-referrer";
+    frame.src = chrome.runtime.getURL("player.html") + "#" + msg.token;
+    item.shadow.replaceChildren(item.style, frame);
+    item.frame = frame;
   }
   function blockedLabel(item) {
     return item.kind === "image" && item.imageCount > 1 ? `${item.imageCount} images blocked — click to load all images`
@@ -108,7 +108,7 @@
   function reset(item) {
     post({type: "revoke", id: item.id});
     item.id = crypto.randomUUID(); item.workerCategory = undefined;
-    item.frame?.remove(); item.frame = null; item.pending = false; item.imageReady = false;
+    item.frame = null; item.pending = false; item.imageReady = false;
     item.button.disabled = false; item.button.textContent = blockedLabel(item);
     item.shadow.replaceChildren(item.style, item.button);
   }
@@ -123,17 +123,21 @@
       }
     }
   }
+  function mediaSource(item) {
+    if (item.kind === "image") return item.poster;
+    return P.videoMatchesPoster(item.poster, item.video, item.mediaId) ? item.video : null;
+  }
   function authorize(item, clicked = false) {
     context();
     if (items.get(item.element) !== item || item.pending || item.frame || !item.element.isConnected) return;
-    const src = item.kind === "video" ? item.video : item.poster;
-    if (!src || (item.kind === "video" && !P.videoMatchesPoster(item.poster, src, item.mediaId))) {
+    const cat = category(item);
+    if (!clicked && !item.manual && P.blocked(settings, cat)) return;
+    const src = mediaSource(item);
+    if (!src) {
       item.button.textContent = "Media source unavailable — waiting for X metadata. Click to retry.";
       return;
     }
     if (clicked) item.manual = true;
-    const cat = category(item);
-    if (!item.manual && P.blocked(settings, cat)) return;
     if (item.isViewer && item.element !== viewerSurface?.ui.stage) return;
     if (!port) connect();
     if (!port) { item.button.textContent = "Extension unavailable — reload this X tab to retry"; return; }
@@ -144,7 +148,7 @@
   }
   function imageKey(item) { return item.mediaIndex + "|" + P.assetKey(item.poster); }
   function activate(item) {
-    context(); dirty.add(document); flush();
+    dirty.add(document); flush();
     if (items.get(item.element) !== item) return;
     if (item.isViewer) {
       for (const entry of viewerSurface.entries) if (entry.poster) viewerSurface.allowed.add(imageKey(entry));
@@ -194,7 +198,7 @@
     if (!record || record.postId !== desc.postId) {
       record = {postId: desc.postId, nonce: ++sequence}; boundaries.set(boundary, record);
     }
-    return {...desc, attachmentPost, group: attachmentPost ? record.nonce + "|" + attachmentPost : desc.element,
+    return {...desc, group: attachmentPost ? record.nonce + "|" + attachmentPost : desc.element,
       base: [desc.postId, attachmentPost, desc.mediaIndex, P.assetKey(desc.poster), P.assetKey(desc.video), desc.kind, desc.mediaId, record.nonce].join("|")};
   }
   function updateItem(element, desc) {
@@ -303,13 +307,13 @@
       item.host.dataset.post = item.postId || "";
       item.host.dataset.attachment = item.attachmentPost || "";
       item.host.dataset.index = item.mediaIndex == null ? "" : String(item.mediaIndex);
-      item.host.dataset.ready = String(!!(item.kind === "video" ? item.video && P.videoMatchesPoster(item.poster, item.video, item.mediaId) : item.poster));
+      item.host.dataset.ready = String(!!mediaSource(item));
       if (!item.pending && !item.frame && item.button.textContent.includes(" blocked — ")) item.button.textContent = blockedLabel(item);
       if ((item.frame || item.pending) && item.workerCategory !== cat) {
         item.workerCategory = cat; post({type: "category", id: item.id, epoch, category: cat});
       }
       if (!item.manual && P.blocked(settings, cat) && (item.frame || item.pending)) reset(item);
-      if ((item.manual || !P.blocked(settings, cat)) && visible(item)) authorize(item);
+      if (visible(item)) authorize(item);
     }
   }
   function imageState(event) {
@@ -368,7 +372,7 @@
     if (!event.isTrusted || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest?.('a[href*="/photo/"]');
     if (!link) return;
-    context(); dirty.add(document); flush();
+    dirty.add(document); flush();
     const item = [...items.values()].find(item => !item.isViewer && item.element.closest("a") === link && item.imageReady);
     if (!item) return;
     event.preventDefault(); event.stopImmediatePropagation();

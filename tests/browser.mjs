@@ -17,9 +17,10 @@ const fixtures = {
   customVideo: 'https://x.com/github/status/2111225205309780009',
   encodedVideo: 'https://x.com/thsottiaux/status/2111249534072529256',
   attributedVideo: 'https://x.com/ctatedev/status/2118853661040295997',
+  quotedVideo: 'https://x.com/thorstenball/status/2118950540021203169',
 };
 const allOn = {a: true, c: true, b: true};
-const report = {mode, results: [], gaps: ['All eight settings on live surfaces', 'Quote/mixed/GIF fixtures',
+const report = {mode, results: [], gaps: ['All eight settings on live surfaces', 'Additional quote layouts and mixed/GIF fixtures',
   'Home/search/profile/account-dependent surfaces', 'Cross-tab and worker/browser restart',
   'Native BFCache', 'Adaptive HLS playback (fixed MP4 only)']};
 const capture = new MediaCapture(ws, target, mode === 'cold');
@@ -90,11 +91,11 @@ async function evidence(name, mark, expectedAssets, expectedKeys = null) {
     statuses: [...new Set(success.map(r => r.status))], credentialChecks: success.filter(r => r.credentialHeaders !== undefined).length});
   console.log('PASS', name);
 }
-async function clickSlot(post, index = '0') {
+async function clickSlot(post, index = '0', attachment = post) {
   await evaluate('document.getElementById("xmf-test-selected")?.removeAttribute("id")');
   let stableSince = Date.now();
   await until(async () => {
-    const stable = await evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.post===${JSON.stringify(post)}&&s.dataset.index===${JSON.stringify(index)}&&!s.closest('#xmf-test-duplicate'));if(!s)return false;const same=s.id==='xmf-test-selected';s.id='xmf-test-selected';s.scrollIntoView({block:'center',behavior:'instant'});return same})()`);
+    const stable = await evaluate(`(()=>{const s=[...document.querySelectorAll('xmf-slot')].find(s=>s.dataset.post===${JSON.stringify(post)}&&s.dataset.attachment===${JSON.stringify(attachment)}&&s.dataset.index===${JSON.stringify(index)}&&!s.closest('#xmf-test-duplicate'));if(!s)return false;const same=s.id==='xmf-test-selected';s.id='xmf-test-selected';s.scrollIntoView({block:'center',behavior:'instant'});return same})()`);
     if (!stable) stableSince = Date.now();
     return stable && Date.now() - stableSince >= 1000;
   }, 'stable selected occurrence');
@@ -235,6 +236,28 @@ try {
     await until(async () => (await slots()).some(s => s.ready && !s.loaded), alias + ' reload');
     await evidence(alias + ' reload revokes authorization', mark, 0);
   }
+  mark = await navigate('quotedVideo');
+  const enclosing = policy.statusId(fixtures.quotedVideo), quoted = '2118694956726440415';
+  await until(async () => (await slots()).some(s => s.post === enclosing && s.category === 'A' && s.ready && s.index === '0') &&
+    await evaluate(`!!document.querySelector('xmf-slot[data-post="${enclosing}"][data-attachment="${quoted}"][data-ready="true"]')`), 'quoted video inherits enclosing policy');
+  await duplicate(enclosing);
+  await evidence('quoted video and two-photo startup barrier', mark, 0);
+  await clickSlot(enclosing); await imageCount(2);
+  assert.ok(await evaluate(`!document.querySelector('xmf-slot[data-attachment="${quoted}"]').shadowRoot.querySelector('iframe')`), 'image group excludes quoted video');
+  await evidence('two-photo group excludes quote and duplicate', mark, 2);
+  await clickSlot(enclosing, '0', quoted);
+  await until(async () => (await capture.player()).some(p => p.kind === 'video' && p.ready >= 1), 'quoted video metadata');
+  await capture.player('play');
+  await until(async () => (await capture.player()).some(p => p.kind === 'video' && p.time > 1 && !p.paused), 'quoted video playback');
+  assert.ok((await slots()).filter(s => s.duplicate).every(s => !s.loaded));
+  await evidence('quoted video trusted playback and duplicate isolation', mark, 3);
+  await settings({a: false, c: true, b: true}); await settings(allOn); await blocked();
+  await evaluate('document.getElementById("xmf-test-duplicate")?.remove()');
+  await evaluate(`document.querySelector('xmf-slot[data-attachment="${enclosing}"]').scrollIntoView({block:'center',behavior:'instant'})`);
+  mark = capture.mark(); await settings({a: false, c: true, b: true});
+  await until(async () => (await capture.player()).filter(p => p.kind === 'video' && p.ready >= 1).length === 1, 'A OFF loads quoted video');
+  await imageCount(2);
+  await evidence('A OFF loads own photos and quoted video', mark, 3);
   report.passed = true;
 } catch (error) {
   report.passed = false; report.failure = String(error.message).replaceAll(ws, '[CDP]'); process.exitCode = 1;

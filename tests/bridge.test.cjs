@@ -208,7 +208,7 @@ test("fetch observation preserves the response and attachment ordinals", async (
   assert.equal(h.messages.length, 1, "invalid JSON does not publish metadata");
 });
 
-for (const url of ["https://example.com/graphql/test/tweetdetail", "https://api.x.com/graphql/test/userbyscreenname", "https://api.x.com/not-graphql/tweetdetail"]) {
+for (const url of ["https://example.com/graphql/test/tweetdetail", "https://api.x.com/not-graphql/tweetdetail"]) {
   test(`unrelated endpoint is not observed: ${url}`, async () => {
     const h = harness();
     h.ready();
@@ -244,6 +244,9 @@ for (const url of [
   "https://api.x.com/graphql/hash/communitiesmainpagetimeline",
   "https://api.x.com/graphql/hash/listlatesttweets",
   "https://api.x.com/graphql/hash/postdetail",
+  "https://api.x.com/graphql/TweetDetail/UserByScreenName",
+  "https://api.x.com/graphql/hash/UserByScreenName?operation=TweetDetail",
+  "https://api.x.com/graphql/hash/Viewer",
 ]) {
   test(`exact X API endpoint is observed: ${url}`, async () => {
     const h = harness();
@@ -263,10 +266,7 @@ for (const url of [
   "https://api.x.com:444/graphql/hash/TweetDetail",
   "https://user:password@api.x.com/graphql/hash/TweetDetail",
   "https://api.x.com/proxy/graphql/hash/TweetDetail",
-  "https://api.x.com/graphql/TweetDetail/UserByScreenName",
-  "https://api.x.com/graphql/hash/UserByScreenName?operation=TweetDetail",
   "https://api.x.com/graphql/hash/TweetDetail/extra",
-  "https://api.x.com/graphql/hash/Viewer",
 ]) {
   test(`non-approved API endpoint stays unobserved: ${url}`, async () => {
     const h = harness();
@@ -281,8 +281,8 @@ test("initial JSON scripts retain current quote association and conversation met
   const quote = {...tweet([photo("2002")]), rest_id: "456"};
   const post = tweet([photo()]);
   post.legacy.in_reply_to_status_id_str = "100";
-  post.legacy.quoted_status_id_str = "456";
-  const h = harness([script(JSON.stringify({data: [quote, post]}))]);
+  post.quoted_tweet_results = {rest_id: "456", result: quote};
+  const h = harness([script(JSON.stringify({data: post}))]);
   assert.deepEqual(h.messages, []);
   h.ready();
   const posts = normalized(h.messages[0].posts);
@@ -435,7 +435,33 @@ test("obsolete media, author and quote wrappers supply no fallback metadata", ()
   post.legacy.quoted_status_id_str = "456";
   post.quoted_status_result = {result: {rest_id: "789"}};
   h.observe(post);
-  assert.equal(h.messages.at(-1).posts[0].quote, "456", "the current scalar owns quote association");
+  assert.equal(Object.hasOwn(h.messages.at(-1).posts[0], "quote"), false, "historical quote fields are ignored");
+});
+
+test("current quote IDs preserve absence and withdraw malformed or conflicting relationships", () => {
+  const invalid = [null, undefined, [], "456", {rest_id: null}, {rest_id: undefined},
+    {rest_id: 456}, {rest_id: ""}, {rest_id: "not-an-id"}, {rest_id: "1".repeat(26)},
+    {rest_id: "456", result: {rest_id: "789"}}, {rest_id: "456", result: null},
+    {rest_id: "456", result: {rest_id: null}}];
+  for (const readyFirst of [false, true]) {
+    for (const value of invalid) {
+      const h = harness();
+      if (readyFirst) h.ready();
+      h.observe({...tweet([]), quoted_tweet_results: {rest_id: "456", result: {rest_id: "456"}}});
+      h.observe(partialTweet([]));
+      h.observe({...partialTweet([]), quoted_tweet_results: {}});
+      h.ready();
+      assert.equal(received(h).quote, "456", "omitted relationship fields preserve metadata");
+      h.observe({...partialTweet([]), quoted_tweet_results: value});
+      h.observe(partialTweet([]));
+      assert.equal(received(h).quote, null, "invalid relationships withdraw without later inheritance");
+      assert.equal(h.messages.at(-2).posts[0].quote, null);
+    }
+  }
+  const h = harness();
+  h.ready();
+  h.observe({...tweet([]), quoted_tweet_results: {rest_id: "456"}});
+  assert.equal(received(h).quote, "456", "the current relationship ID does not require expanded post data");
 });
 
 test("unrelated IDs with malformed legacy containers do not qualify as posts", () => {
@@ -479,13 +505,14 @@ test("omitted fields differ from malformed supplied fields without leaking raw v
   const post = tweet([{...video(), id_str: {}, media_key: null, type: {}, video_info: {variants: {}}, original_info: {width: {}, height: "wrong"}}]);
   post.core.user_results.result.core.screen_name = {};
   post.core.user_results.result.legacy = {screen_name: "fallback"};
-  post.legacy = {conversation_id_str: {}, in_reply_to_status_id_str: null, quoted_status_id_str: {private: "secret"}};
+  post.legacy = {conversation_id_str: {}, in_reply_to_status_id_str: null};
+  post.quoted_tweet_results = {rest_id: {private: "secret"}};
   h.observe(post);
   const invalid = h.messages.at(-1).posts[0];
   for (const key of ["author", "conversation", "parent", "quote"]) assert.equal(invalid[key], null, key);
   for (const key of ["variants", "mediaId", "key", "type"]) assert.equal(invalid.media[0][key], null, key);
   for (const value of [null, [], "wrong"]) {
-    h.observe({...partialTweet([{...photo(), video_info: value}]), core: value, legacy: value});
+    h.observe({...partialTweet([{...photo(), video_info: value}]), core: value, legacy: value, quoted_tweet_results: value});
     const invalidContainers = h.messages.at(-1).posts[0];
     assert.equal(invalidContainers.author, null);
     assert.equal(invalidContainers.quote, null);
@@ -517,7 +544,8 @@ for (const readyFirst of [false, true]) {
       const h = harness();
       if (readyFirst) h.ready();
       const full = tweet([{...video(), media_key: "7_1001"}]);
-      Object.assign(full.legacy, {in_reply_to_status_id_str: "100", quoted_status_id_str: "456"});
+      full.legacy.in_reply_to_status_id_str = "100";
+      full.quoted_tweet_results = {rest_id: "456", result: {rest_id: "456"}};
       const records = [full, partialTweet([{media_url_https: image, type: "video", id_str: "1001"}])];
       if (reverse) records.reverse();
       for (const record of records) h.observe(record);
@@ -568,7 +596,7 @@ test("only sanitized copies survive queued updates; invalid scalars clear known 
   full.core.user_results.result.core.screen_name = "mutated";
   full.media_entities2[0].video_info.variants[0].url = "secret";
   h.observe({...partialTweet([{media_url_https: image, type: "video", id_str: {private: "secret"}}]),
-    legacy: {conversation_id_str: null, in_reply_to_status_id_str: null, quoted_status_id_str: null}, core: null});
+    legacy: {conversation_id_str: null, in_reply_to_status_id_str: null}, quoted_tweet_results: null, core: null});
   h.observe(partialTweet());
   h.ready();
   const post = received(h);

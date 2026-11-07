@@ -374,6 +374,22 @@ test("attributed players preserve nested quote ownership", () => {
   assert.equal(found.attachmentPost, "1");
 });
 
+test("two own photos and an attributed quoted article inside a role-link remain separate groups", () => {
+  const { article: quoted, entry, player } = attributedPlayer();
+  const article = el("article", {}, permalink("3"), photo("3", 1, "one"), photo("3", 2, "two"),
+    el("div", { role: "link" }, quoted));
+  const map = posts(post("3", [media("one"), media("two")], { quote: "1" }), post("1", [entry]));
+  assert.equal(adapter.owner(article, map), "3");
+  assert.deepEqual(adapter.scan(article, map).map(({ postId, attachmentPost, mediaIndex }) =>
+    [postId, attachmentPost, mediaIndex]), [["3", "3", 0], ["3", "3", 1], ["3", "1", 0]]);
+  assert.equal(adapter.scan(article, map)[2].element, player);
+  assert.equal(adapter.scan(player.querySelector("img"), map)[0].postId, "3");
+  map.set("3", post("3", [media("one"), media("two")]));
+  assert.equal(adapter.scan(article, map)[2].postId, null, "DOM nesting cannot override a missing quote relationship");
+  map.set("3", post("3", [media("one"), media("two")], { quote: "2" }));
+  assert.equal(adapter.scan(article, map)[2].postId, null, "a source credit is not the quoted attachment owner");
+});
+
 test("native players preserve quote ownership and unknown-owner guarantees", () => {
   const entry = media("custom", { type: "video" });
   for (const container of ["blockquote", "article", "role-link"]) {

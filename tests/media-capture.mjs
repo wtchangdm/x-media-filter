@@ -106,7 +106,8 @@ export class MediaCapture {
     for (const [session, contextId] of this.sessions) {
       if (session === this.root || this.workerSessions.has(session) || contextId === null) continue;
       try {
-        const expression = `(location.protocol==='chrome-extension:' && location.pathname==='/player.html') ? (${expressions[action]}) : null`;
+        const expression = `(location.protocol==='chrome-extension:' && location.pathname==='/player.html' &&
+          (${action === 'state'} || !!document.querySelector('video'))) ? (${expressions[action]}) : null`;
         // Never wait for an implicit replacement context after a renderer is revoked.
         const reply = await this.cdp.call('Runtime.evaluate', {expression, contextId, returnByValue: true, awaitPromise: true, userGesture: true}, session);
         if (reply.exceptionDetails) throw new Error(reply.exceptionDetails.text);

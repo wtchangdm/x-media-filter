@@ -107,7 +107,7 @@ This is a guarantee for supported delivery families, not an operating-system fir
 
 ## 6. Current-X integration contract
 
-The page bridge observes relevant `https://api.x.com/graphql/<hash>/<operation>` fetch/XHR responses and bounded inline JSON/bootstrap data already delivered to X. Current media records come from **`media_entities2`** and author handles from **`core.user_results.result.core.screen_name`**. Conversation, parent and quote IDs use the current `legacy` relationship fields. Do not add alternate historical media/author schemas, hard-coded GraphQL hashes or fixture IDs as compatibility fallbacks. Decode data only; never evaluate page script text.
+The page bridge observes `https://api.x.com/graphql/<hash>/<operation>` fetch/XHR responses and bounded inline JSON/bootstrap data already delivered to X; operation names do not determine whether metadata is usable. Current media records come from **`media_entities2`** and author handles from **`core.user_results.result.core.screen_name`**. Conversation and parent IDs use the `legacy` relationship fields; quote identity comes from **`quoted_tweet_results.rest_id`**, with no conflicting expanded result ID. Do not add alternate historical schemas, hard-coded GraphQL hashes or fixture IDs as compatibility fallbacks. Decode data only; never evaluate page script text.
 
 The bridge transports sanitized updates; only the isolated coordinator merges them, in arrival order. The bridge's bounded bootstrap queue drops oldest updates on overflow, so affected media may remain unavailable until fresh metadata arrives or the page reloads.
 

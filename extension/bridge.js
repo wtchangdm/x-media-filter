@@ -15,9 +15,8 @@
   function relevant(url) {
     try {
       const u = new URL(url, location.href);
-      const operation = /^\/graphql\/[A-Za-z0-9_-]+\/([A-Za-z0-9_]+)$/.exec(u.pathname)?.[1];
       return !u.username && !u.password && u.origin === "https://api.x.com" &&
-        !!operation && /tweet|post|timeline|search|bookmark|notification|communit|list/i.test(operation);
+        /^\/graphql\/[A-Za-z0-9_-]+\/[A-Za-z0-9_]+$/.test(u.pathname);
     }
     catch { return false; }
   }
@@ -52,6 +51,26 @@
     }) : null);
     return media;
   }
+  const statusId = value => typeof value === "string" && /^\d{1,25}$/.test(value) ? value : null;
+  function quoteId(node) {
+    const id = field(node, "quoted_tweet_results", "rest_id");
+    const resultId = field(node, "quoted_tweet_results", "result", "rest_id");
+    // A missing relationship is not a withdrawal; a conflicting identity is.
+    return id === undefined || resultId === undefined || resultId === id ? id : null;
+  }
+  function postMetadata(node) {
+    const id = statusId(node.rest_id);
+    const legacy = field(node, "legacy");
+    if (!id || !(Object.hasOwn(node, "media_entities2") ||
+        (legacy && typeof legacy === "object" && !Array.isArray(legacy) && Object.hasOwn(legacy, "conversation_id_str")))) return null;
+    const post = {id};
+    put(post, "author", field(node, "core", "user_results", "result", "core", "screen_name"), value => scalar(value, 15));
+    put(post, "conversation", field(legacy, "conversation_id_str"), value => scalar(value, 25));
+    put(post, "parent", field(legacy, "in_reply_to_status_id_str"), value => scalar(value, 25));
+    put(post, "quote", quoteId(node), statusId);
+    put(post, "media", field(node, "media_entities2"), value => Array.isArray(value) ? value.slice(0, 16).map(attachment) : null);
+    return post;
+  }
   function observe(data, limits = {nodes: 60000, posts: 500}) {
     const stack = [data];
     const seen = new Set();
@@ -60,16 +79,8 @@
       const node = stack.pop();
       if (!node || typeof node !== "object" || seen.has(node)) continue;
       seen.add(node);
-      const legacy = field(node, "legacy");
-      if (typeof node.rest_id === "string" && /^\d{1,25}$/.test(node.rest_id) &&
-          (Object.hasOwn(node, "media_entities2") || (legacy && typeof legacy === "object" && !Array.isArray(legacy) &&
-            Object.hasOwn(legacy, "conversation_id_str")))) {
-        const post = {id: node.rest_id};
-        put(post, "author", field(node, "core", "user_results", "result", "core", "screen_name"), value => scalar(value, 15));
-        put(post, "conversation", field(legacy, "conversation_id_str"), value => scalar(value, 25));
-        put(post, "parent", field(legacy, "in_reply_to_status_id_str"), value => scalar(value, 25));
-        put(post, "quote", field(legacy, "quoted_status_id_str"), value => scalar(value, 25));
-        put(post, "media", field(node, "media_entities2"), value => Array.isArray(value) ? value.slice(0, 16).map(attachment) : null);
+      const post = postMetadata(node);
+      if (post) {
         posts.push(post);
         limits.posts--;
       }
